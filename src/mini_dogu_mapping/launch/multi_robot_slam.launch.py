@@ -20,7 +20,7 @@ def generate_launch_description():
         PythonLaunchDescriptionSource(robot_slam_launch),
         launch_arguments={
             "namespace": "robot1",
-            "use_sim_time": "true",
+            "use_sim_time": "false",
         }.items(),
     )
 
