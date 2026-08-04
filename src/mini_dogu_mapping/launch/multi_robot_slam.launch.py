@@ -21,6 +21,10 @@ def generate_launch_description():
         launch_arguments={
             "namespace": "robot1",
             "use_sim_time": "false",
+            "map_frame": "robot1/map",
+            "odom_frame": "robot1/odom",
+            "base_frame": "robot1/base_link",
+            "scan_topic": "scan",
         }.items(),
     )
 
@@ -28,7 +32,11 @@ def generate_launch_description():
         PythonLaunchDescriptionSource(robot_slam_launch),
         launch_arguments={
             "namespace": "robot2",
-            "use_sim_time": "true",
+            "use_sim_time": "false",
+            "map_frame": "robot2/map",
+            "odom_frame": "robot2/odom",
+            "base_frame": "robot2/base_link",
+            "scan_topic": "scan",
         }.items(),
     )
 

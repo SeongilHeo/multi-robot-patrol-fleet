@@ -1,6 +1,6 @@
 slam_toolbox:
   ros__parameters:
-    use_sim_time: true
+    use_sim_time: false
 
     solver_plugin: solver_plugins::CeresSolver
     ceres_linear_solver: SPARSE_NORMAL_CHOLESKY
@@ -11,9 +11,9 @@ slam_toolbox:
 
     mode: mapping
 
-    odom_frame: odom
     map_frame: map
-    base_frame: base_footprint
+    odom_frame: odom
+    base_frame: base_link
     scan_topic: scan
 
     map_update_interval: 2.0
