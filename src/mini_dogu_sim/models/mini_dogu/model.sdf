@@ -1,0 +1,197 @@
+<?xml version="1.0"?>
+<sdf version="1.9">
+  <model name="mini_dogu">
+
+    <pose>0 0 0.11 0 0 0</pose>
+
+    <link name="base_link">
+      <inertial>
+        <mass>20.0</mass>
+        <inertia>
+          <ixx>0.416</ixx>
+          <iyy>0.654</iyy>
+          <izz>0.802</izz>
+          <ixy>0.0</ixy>
+          <ixz>0.0</ixz>
+          <iyz>0.0</iyz>
+        </inertia>
+      </inertial>
+
+      <collision name="base_collision">
+        <pose>0 0 0.15 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.55 0.40 0.30</size>
+          </box>
+        </geometry>
+      </collision>
+
+      <visual name="base_visual">
+        <pose>0 0 0.15 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.55 0.40 0.30</size>
+          </box>
+        </geometry>
+
+        <material>
+          <ambient>0.20 0.30 0.55 1.0</ambient>
+          <diffuse>0.20 0.30 0.55 1.0</diffuse>
+        </material>
+      </visual>
+
+      <sensor name="lidar" type="gpu_lidar">
+        <pose>0.15 0 0.36 0 0 0</pose>
+
+        <topic>/robot1/scan</topic>
+        <gz_frame_id>robot1/lidar_link</gz_frame_id>
+
+        <update_rate>5</update_rate>
+        <always_on>true</always_on>
+        <visualize>false</visualize>
+
+        <ray>
+          <scan>
+            <horizontal>
+              <samples>180</samples>
+              <resolution>1</resolution>
+              <min_angle>-3.14159265</min_angle>
+              <max_angle>3.14159265</max_angle>
+            </horizontal>
+
+            <vertical>
+              <samples>1</samples>
+              <resolution>1</resolution>
+              <min_angle>0</min_angle>
+              <max_angle>0</max_angle>
+            </vertical>
+          </scan>
+
+          <range>
+            <min>0.10</min>
+            <max>15.0</max>
+            <resolution>0.02</resolution>
+          </range>
+        </ray>
+      </sensor>
+    </link>
+
+    <link name="left_wheel">
+      <pose>0 0.23 0.10 1.570796 0 0</pose>
+
+      <inertial>
+        <mass>1.0</mass>
+        <inertia>
+          <ixx>0.005</ixx>
+          <iyy>0.005</iyy>
+          <izz>0.005</izz>
+        </inertia>
+      </inertial>
+
+      <collision name="collision">
+        <geometry>
+          <cylinder>
+            <radius>0.10</radius>
+            <length>0.05</length>
+          </cylinder>
+        </geometry>
+      </collision>
+
+      <visual name="visual">
+        <geometry>
+          <cylinder>
+            <radius>0.10</radius>
+            <length>0.05</length>
+          </cylinder>
+        </geometry>
+      </visual>
+    </link>
+
+    <link name="right_wheel">
+      <pose>0 -0.23 0.10 1.570796 0 0</pose>
+
+      <inertial>
+        <mass>1.0</mass>
+        <inertia>
+          <ixx>0.005</ixx>
+          <iyy>0.005</iyy>
+          <izz>0.005</izz>
+        </inertia>
+      </inertial>
+
+      <collision name="collision">
+        <geometry>
+          <cylinder>
+            <radius>0.10</radius>
+            <length>0.05</length>
+          </cylinder>
+        </geometry>
+      </collision>
+
+      <visual name="visual">
+        <geometry>
+          <cylinder>
+            <radius>0.10</radius>
+            <length>0.05</length>
+          </cylinder>
+        </geometry>
+      </visual>
+    </link>
+
+    <joint name="left_wheel_joint" type="revolute">
+      <parent>base_link</parent>
+      <child>left_wheel</child>
+
+      <axis>
+        <xyz>0 1 0</xyz>
+        <limit>
+          <lower>-1.0e16</lower>
+          <upper>1.0e16</upper>
+          <effort>100</effort>
+          <velocity>20</velocity>
+        </limit>
+      </axis>
+    </joint>
+
+    <joint name="right_wheel_joint" type="revolute">
+      <parent>base_link</parent>
+      <child>right_wheel</child>
+
+      <axis>
+        <xyz>0 1 0</xyz>
+        <limit>
+          <lower>-1.0e16</lower>
+          <upper>1.0e16</upper>
+          <effort>100</effort>
+          <velocity>20</velocity>
+        </limit>
+      </axis>
+    </joint>
+
+    <plugin
+      filename="gz-sim-diff-drive-system"
+      name="gz::sim::systems::DiffDrive">
+
+      <left_joint>left_wheel_joint</left_joint>
+      <right_joint>right_wheel_joint</right_joint>
+
+      <wheel_separation>0.46</wheel_separation>
+      <wheel_radius>0.10</wheel_radius>
+
+      <topic>/robot1/cmd_vel</topic>
+      <odom_topic>/robot1/odom</odom_topic>
+      <tf_topic>/robot1/tf</tf_topic>
+
+      <frame_id>robot1/odom</frame_id>
+      <child_frame_id>robot1/base_link</child_frame_id>
+
+      <odom_publish_frequency>30</odom_publish_frequency>
+
+      <max_linear_velocity>1.0</max_linear_velocity>
+      <max_angular_velocity>1.5</max_angular_velocity>
+      <max_linear_acceleration>1.0</max_linear_acceleration>
+      <max_angular_acceleration>2.0</max_angular_acceleration>
+    </plugin>
+
+  </model>
+</sdf>
