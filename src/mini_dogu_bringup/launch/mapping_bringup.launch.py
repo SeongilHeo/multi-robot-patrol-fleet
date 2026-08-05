@@ -26,6 +26,12 @@ def generate_launch_description():
         "multi_robot_slam.launch.py",
     )
 
+    map_frames_launch = os.path.join(
+        mapping_share,
+        "launch",
+        "map_frames.launch.py",
+    )
+
     robot_description = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(robot_description_launch),
         launch_arguments={
@@ -40,6 +46,10 @@ def generate_launch_description():
         }.items(),
     )
 
+    map_frames = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(map_frames_launch),
+    )
+
     return LaunchDescription([
         DeclareLaunchArgument(
             "use_sim_time",
@@ -47,4 +57,5 @@ def generate_launch_description():
         ),
         robot_description,
         multi_robot_slam,
+        map_frames,
     ])
