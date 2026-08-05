@@ -14,6 +14,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/RobotHeartbeat.msg"
   "msg/FleetRobotState.msg"
   "msg/FleetState.msg"
+  "srv/AssignMission.srv"
   DEPENDENCIES builtin_interfaces
 )
 
