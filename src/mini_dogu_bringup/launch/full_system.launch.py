@@ -52,7 +52,7 @@ def generate_launch_description():
     patrol_launch = os.path.join(
         patrol_share,
         "launch",
-        "patrol.launch.py",
+        "multi_robot_patrol.launch.py",
     )
 
     simulation = IncludeLaunchDescription(
@@ -94,12 +94,11 @@ def generate_launch_description():
         actions=[
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(
-                    navigation_launch
+                    patrol_launch
                 ),
                 launch_arguments={
-                    "namespace": "robot1",
                     "use_sim_time": use_sim_time,
-                    "autostart": start_navigation,
+                    "autostart": "false",
                 }.items(),
             )
         ],
