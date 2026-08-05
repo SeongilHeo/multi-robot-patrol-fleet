@@ -132,6 +132,9 @@ def create_robot_actions(context):
                     "[gz.msgs.LaserScan"
                 ),
             ],
+            remappings=[
+                (f"/{robot_name}/tf", "/tf"),
+            ],
         )
 
         # Gazebo가 먼저 시작된 뒤 순서대로 spawn한다.

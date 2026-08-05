@@ -56,9 +56,5 @@ def generate_launch_description():
                 "robot_description": robot_description,
                 "use_sim_time": use_sim_time,
             }],
-            remappings=[
-                ("/tf", "tf"),
-                ("/tf_static", "tf_static"),
-            ],
         ),
     ])
