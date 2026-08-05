@@ -58,10 +58,14 @@ PatrolManager::PatrolManager(const rclcpp::NodeOptions & options)
   const std::string patrol_prefix =
     "/" + robot_namespace_ + "/patrol";
 
+  rclcpp::QoS status_qos(1);
+  status_qos.reliable();
+  status_qos.transient_local();
+
   status_publisher_ =
     this->create_publisher<std_msgs::msg::String>(
-    patrol_prefix + "/status",
-    10);
+      patrol_prefix + "/status",
+      status_qos);
 
   start_service_ =
     this->create_service<std_srvs::srv::Trigger>(

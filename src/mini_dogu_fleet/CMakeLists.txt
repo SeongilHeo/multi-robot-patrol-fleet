@@ -9,6 +9,7 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(mini_dogu_interfaces REQUIRED)
 find_package(std_srvs REQUIRED)
+find_package(std_msgs REQUIRED)
 
 add_executable(
   fleet_manager_node
@@ -37,6 +38,14 @@ ament_target_dependencies(
   rclcpp
   mini_dogu_interfaces
   std_srvs
+)
+
+ament_target_dependencies(
+  fleet_manager_node
+  rclcpp
+  mini_dogu_interfaces
+  std_srvs
+  std_msgs
 )
 
 install(
