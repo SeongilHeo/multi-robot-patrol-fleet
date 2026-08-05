@@ -17,13 +17,29 @@ def generate_launch_description():
     start_navigation = LaunchConfiguration("start_navigation")
     start_patrol = LaunchConfiguration("start_patrol")
 
-    sim_share = get_package_share_directory("mini_dogu_sim")
-    bringup_share = get_package_share_directory("mini_dogu_bringup")
+    sim_share = get_package_share_directory(
+        "mini_dogu_sim"
+    )
+    
+    bringup_share = get_package_share_directory(
+        "mini_dogu_bringup"
+    )
+    
     navigation_share = get_package_share_directory(
         "mini_dogu_navigation"
     )
-    patrol_share = get_package_share_directory("mini_dogu_patrol")
-    merge_map_share = get_package_share_directory("merge_map")
+    
+    patrol_share = get_package_share_directory(
+        "mini_dogu_patrol"
+    )
+    
+    merge_map_share = get_package_share_directory(
+        "merge_map"
+    )
+
+    scheduler_share = get_package_share_directory(
+        "mini_dogu_scheduler"
+    )
 
     simulation_launch = os.path.join(
         sim_share,
@@ -55,8 +71,16 @@ def generate_launch_description():
         "multi_robot_patrol.launch.py",
     )
 
+    scheduler_launch = os.path.join(
+        scheduler_share,
+        "launch",
+        "scheduler.launch.py",
+    )
+
     simulation = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(simulation_launch),
+        PythonLaunchDescriptionSource(
+            simulation_launch
+        ),
     )
 
     system_bringup = TimerAction(
@@ -115,6 +139,21 @@ def generate_launch_description():
         ],
     )
 
+    scheduler = TimerAction(
+        period=15.0,
+        actions=[
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(
+                    scheduler_launch
+                ),
+                launch_arguments={
+                    "use_sim_time": use_sim_time,
+                    "minimum_battery_percentage": "20.0",
+                }.items(),
+            )
+        ],
+    )
+
     return LaunchDescription([
         DeclareLaunchArgument(
             "use_sim_time",
@@ -125,15 +164,13 @@ def generate_launch_description():
         DeclareLaunchArgument(
             "start_navigation",
             default_value="true",
-            description="Automatically activate robot1 Nav2",
+            description="Automatically activate Nav2",
         ),
 
         DeclareLaunchArgument(
             "start_patrol",
             default_value="false",
-            description=(
-                "Reserved for future automatic patrol startup"
-            ),
+            description="Automatically start patrol",
         ),
 
         simulation,
@@ -141,4 +178,5 @@ def generate_launch_description():
         map_merge,
         navigation,
         patrol,
+        scheduler,
     ])
