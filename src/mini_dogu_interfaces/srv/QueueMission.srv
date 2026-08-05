@@ -1,0 +1,6 @@
+string mission_type
+int32 priority
+---
+bool accepted
+string mission_id
+string message

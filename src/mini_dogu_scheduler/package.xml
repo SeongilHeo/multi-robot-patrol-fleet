@@ -19,6 +19,7 @@
   <depend>rclcpp</depend>
   <depend>mini_dogu_interfaces</depend>
   <depend>std_srvs</depend>
+  <depend>std_msgs</depend>
 
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>

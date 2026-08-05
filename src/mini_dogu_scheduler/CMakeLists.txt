@@ -8,6 +8,7 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(mini_dogu_interfaces REQUIRED)
+find_package(std_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
 
 add_executable(
@@ -25,6 +26,7 @@ ament_target_dependencies(
   mission_scheduler_node
   rclcpp
   mini_dogu_interfaces
+  std_msgs
   std_srvs
 )
 
