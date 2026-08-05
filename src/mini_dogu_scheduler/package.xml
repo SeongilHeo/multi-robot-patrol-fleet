@@ -5,7 +5,7 @@
   <version>0.0.1</version>
 
   <description>
-    Mission scheduling and robot selection for Mini DOGU.
+    Fleet-aware mission scheduling and robot selection for the Mini DOGU multi-robot platform.
   </description>
 
   <maintainer email="seongil.e.heo@gmail.com">

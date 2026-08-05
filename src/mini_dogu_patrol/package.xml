@@ -1,29 +1,31 @@
 <?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>mini_dogu_patrol</name>
-  <version>0.1.0</version>
+  <version>0.0.1</version>
 
   <description>
-    Patrol mission manager for the Mini DOGU multi-robot system.
+    Namespaced patrol mission management using Nav2 FollowWaypoints for the Mini DOGU multi-robot platform.
   </description>
 
-  <maintainer email="seongil@example.com">
+  <maintainer email="seongil.e.heo@gmail.com">
     Seongil Heo
   </maintainer>
 
-  <license>MIT</license>
+  <license>Apache-2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
-  <depend>geometry_msgs</depend>
-  <depend>nav2_msgs</depend>
   <depend>rclcpp</depend>
   <depend>rclcpp_action</depend>
+  <depend>geometry_msgs</depend>
+  <depend>nav2_msgs</depend>
   <depend>std_msgs</depend>
   <depend>std_srvs</depend>
 
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
+  
   <exec_depend>nav2_common</exec_depend>
 
   <export>

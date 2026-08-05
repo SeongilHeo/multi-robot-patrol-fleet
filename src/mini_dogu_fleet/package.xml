@@ -1,13 +1,14 @@
 <?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>mini_dogu_fleet</name>
   <version>0.0.1</version>
 
   <description>
-    Fleet monitoring and robot heartbeat management for Mini DOGU.
+    Fleet management, heartbeat monitoring, and mission dispatch for the Mini DOGU multi-robot platform.
   </description>
 
-  <maintainer email="your-email@example.com">
+  <maintainer email="seongil.e.heo@gmail.com">
     Seongil Heo
   </maintainer>
 
@@ -17,9 +18,10 @@
 
   <depend>rclcpp</depend>
   <depend>mini_dogu_interfaces</depend>
-  <depend>std_srvs</depend>
   <depend>std_msgs</depend>
+  <depend>std_srvs</depend>
 
+  <exec_depend>ament_index_python</exec_depend>
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
 
