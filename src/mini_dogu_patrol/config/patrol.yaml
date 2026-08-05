@@ -1,0 +1,34 @@
+patrol_manager:
+  ros__parameters:
+    use_sim_time: true
+
+    robot_namespace: robot1
+    frame_id: robot1/map
+
+    autostart: true
+    server_wait_timeout: 15.0
+
+    # 0: waypoint 목록을 한 번 수행하고 종료
+    number_of_loops: 0
+
+    # 시작 waypoint index
+    goal_index: 0
+
+    # [x, y, yaw, x, y, yaw, ...]
+    # yaw 단위는 radian
+    waypoints:
+      - 0.5
+      - 0.0
+      - 0.0
+
+      - 0.5
+      - 0.5
+      - 1.57079632679
+
+      - 0.0
+      - 0.5
+      - 3.14159265359
+
+      - 0.0
+      - 0.0
+      - -1.57079632679
