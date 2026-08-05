@@ -11,6 +11,9 @@
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp_action/rclcpp_action.hpp"
 
+#include "std_msgs/msg/string.hpp"
+#include "std_srvs/srv/trigger.hpp"
+
 namespace mini_dogu_patrol
 {
 
@@ -40,6 +43,16 @@ private:
   void result_callback(
     const GoalHandleFollowWaypoints::WrappedResult & result);
 
+  void handle_start(
+    const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+    std::shared_ptr<std_srvs::srv::Trigger::Response> response);
+
+  void handle_stop(
+    const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+    std::shared_ptr<std_srvs::srv::Trigger::Response> response);
+
+  void publish_status(const std::string & status);
+
   std::string robot_namespace_;
   std::string frame_id_;
   std::string action_name_;
@@ -53,6 +66,15 @@ private:
 
   rclcpp_action::Client<FollowWaypoints>::SharedPtr action_client_;
   rclcpp::TimerBase::SharedPtr start_timer_;
+
+  bool patrol_active_{false};
+
+  GoalHandleFollowWaypoints::SharedPtr active_goal_handle_;
+    
+  rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr start_service_;
+  rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr stop_service_;
+    
+  rclcpp::Publisher<std_msgs::msg::String>::SharedPtr status_publisher_;
 };
 
 }  // namespace mini_dogu_patrol

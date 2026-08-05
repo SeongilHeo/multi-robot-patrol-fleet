@@ -55,6 +55,34 @@ PatrolManager::PatrolManager(const rclcpp::NodeOptions & options)
     this,
     action_name_);
 
+  const std::string patrol_prefix =
+    "/" + robot_namespace_ + "/patrol";
+
+  status_publisher_ =
+    this->create_publisher<std_msgs::msg::String>(
+    patrol_prefix + "/status",
+    10);
+
+  start_service_ =
+    this->create_service<std_srvs::srv::Trigger>(
+    patrol_prefix + "/start",
+    std::bind(
+      &PatrolManager::handle_start,
+      this,
+      std::placeholders::_1,
+      std::placeholders::_2));
+
+  stop_service_ =
+    this->create_service<std_srvs::srv::Trigger>(
+    patrol_prefix + "/stop",
+    std::bind(
+      &PatrolManager::handle_stop,
+      this,
+      std::placeholders::_1,
+      std::placeholders::_2));
+
+  publish_status("idle");
+
   RCLCPP_INFO(
     this->get_logger(),
     "Patrol manager configured for robot '%s'",
@@ -122,8 +150,64 @@ PatrolManager::build_waypoints() const
   return poses;
 }
 
+void PatrolManager::handle_start(
+  const std::shared_ptr<std_srvs::srv::Trigger::Request>,
+  std::shared_ptr<std_srvs::srv::Trigger::Response> response)
+{
+  if (patrol_active_) {
+    response->success = false;
+    response->message = "Patrol mission is already active";
+    return;
+  }
+
+  response->success = true;
+  response->message = "Patrol mission start requested";
+
+  start_patrol();
+}
+
+void PatrolManager::handle_stop(
+  const std::shared_ptr<std_srvs::srv::Trigger::Request>,
+  std::shared_ptr<std_srvs::srv::Trigger::Response> response)
+{
+  if (!patrol_active_ || !active_goal_handle_) {
+    response->success = false;
+    response->message = "No active patrol mission";
+    return;
+  }
+
+  publish_status("canceling");
+
+  action_client_->async_cancel_goal(active_goal_handle_);
+
+  response->success = true;
+  response->message = "Patrol cancellation requested";
+}
+
+void PatrolManager::publish_status(const std::string & status)
+{
+  std_msgs::msg::String message;
+  message.data = status;
+
+  status_publisher_->publish(message);
+
+  RCLCPP_INFO(
+    this->get_logger(),
+    "Patrol status: %s",
+    status.c_str());
+}
+
 void PatrolManager::start_patrol()
 {
+  if (patrol_active_) {
+    RCLCPP_WARN(
+      this->get_logger(),
+      "Patrol mission is already active");
+    return;
+  }
+
+  publish_status("waiting_for_nav2");
+
   const auto wait_duration =
     std::chrono::duration<double>(server_wait_timeout_);
 
@@ -139,6 +223,8 @@ void PatrolManager::start_patrol()
       server_wait_timeout_);
     return;
   }
+
+  publish_status("sending_goal");
 
   FollowWaypoints::Goal goal;
 
@@ -211,11 +297,21 @@ void PatrolManager::goal_response_callback(
   const GoalHandleFollowWaypoints::SharedPtr & goal_handle)
 {
   if (!goal_handle) {
+    patrol_active_ = false;
+
+    publish_status("rejected");
+
     RCLCPP_ERROR(
       this->get_logger(),
       "Patrol goal was rejected");
+
     return;
   }
+
+  active_goal_handle_ = goal_handle;
+  patrol_active_ = true;
+
+  publish_status("active");
 
   RCLCPP_INFO(
     this->get_logger(),
@@ -235,33 +331,37 @@ void PatrolManager::feedback_callback(
 void PatrolManager::result_callback(
   const GoalHandleFollowWaypoints::WrappedResult & result)
 {
+  patrol_active_ = false;
+  active_goal_handle_.reset();
+
   switch (result.code) {
     case rclcpp_action::ResultCode::SUCCEEDED:
+      publish_status("completed");
+
       RCLCPP_INFO(
         this->get_logger(),
         "Patrol mission completed");
-
-      if (!result.result->missed_waypoints.empty()) {
-        RCLCPP_WARN(
-          this->get_logger(),
-          "Mission completed with %zu missed waypoint(s)",
-          result.result->missed_waypoints.size());
-      }
       break;
 
     case rclcpp_action::ResultCode::ABORTED:
+      publish_status("aborted");
+
       RCLCPP_ERROR(
         this->get_logger(),
         "Patrol mission was aborted");
       break;
 
     case rclcpp_action::ResultCode::CANCELED:
+      publish_status("canceled");
+
       RCLCPP_WARN(
         this->get_logger(),
         "Patrol mission was canceled");
       break;
 
     default:
+      publish_status("error");
+
       RCLCPP_ERROR(
         this->get_logger(),
         "Patrol mission returned an unknown result");

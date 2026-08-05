@@ -5,17 +5,12 @@ patrol_manager:
     robot_namespace: robot1
     frame_id: robot1/map
 
-    autostart: true
+    autostart: false
     server_wait_timeout: 15.0
 
-    # 0: waypoint 목록을 한 번 수행하고 종료
     number_of_loops: 0
-
-    # 시작 waypoint index
     goal_index: 0
 
-    # [x, y, yaw, x, y, yaw, ...]
-    # yaw 단위는 radian
     waypoints:
       - 0.5
       - 0.0

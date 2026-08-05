@@ -10,6 +10,8 @@ find_package(geometry_msgs REQUIRED)
 find_package(nav2_msgs REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_action REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(std_srvs REQUIRED)
 
 add_executable(
   patrol_manager
@@ -35,6 +37,8 @@ ament_target_dependencies(
   nav2_msgs
   rclcpp
   rclcpp_action
+  std_msgs
+  std_srvs
 )
 
 install(
