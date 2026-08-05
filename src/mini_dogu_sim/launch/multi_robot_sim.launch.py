@@ -105,43 +105,6 @@ def create_robot_actions(context):
             }.items(),
         )
 
-        robot_bridge = Node(
-            package="ros_gz_bridge",
-            executable="parameter_bridge",
-            name=f"{robot_name}_bridge",
-            output="screen",
-            parameters=[
-                {
-                    "use_sim_time": True,
-                }
-            ],
-            arguments=[
-                (
-                    f"/{robot_name}/cmd_vel"
-                    "@geometry_msgs/msg/Twist"
-                    "]gz.msgs.Twist"
-                ),
-                (
-                    f"/{robot_name}/odom"
-                    "@nav_msgs/msg/Odometry"
-                    "[gz.msgs.Odometry"
-                ),
-                (
-                    f"/{robot_name}/tf"
-                    "@tf2_msgs/msg/TFMessage"
-                    "[gz.msgs.Pose_V"
-                ),
-                (
-                    f"/{robot_name}/scan"
-                    "@sensor_msgs/msg/LaserScan"
-                    "[gz.msgs.LaserScan"
-                ),
-            ],
-            remappings=[
-                (f"/{robot_name}/tf", "/tf"),
-            ],
-        )
-
         lidar_frame_alias = Node(
             package="tf2_ros",
             executable="static_transform_publisher",
@@ -164,13 +127,11 @@ def create_robot_actions(context):
             ],
         )
 
-        # Gazebo가 먼저 시작된 뒤 순서대로 spawn한다.
         actions.append(
             TimerAction(
                 period=2.0 + index,
                 actions=[
                     spawn_robot,
-                    robot_bridge,
                     lidar_frame_alias,
                 ],
             )
@@ -197,6 +158,12 @@ def generate_launch_description():
     model_path = os.path.join(
         mini_dogu_sim_share,
         "models",
+    )
+    
+    bridge_launch_file = os.path.join(
+        mini_dogu_sim_share,
+        "launch",
+        "bridge.launch.py",
     )
 
     existing_resource_path = os.environ.get(
@@ -225,14 +192,13 @@ def generate_launch_description():
         }.items(),
     )
 
-    clock_bridge = Node(
-        package="ros_gz_bridge",
-        executable="parameter_bridge",
-        name="clock_bridge",
-        output="screen",
-        arguments=[
-            "/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock",
-        ],
+    bridge = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            bridge_launch_file
+        ),
+        launch_arguments={
+            "use_sim_time": "true",
+        }.items(),
     )
 
     return LaunchDescription([
@@ -241,7 +207,7 @@ def generate_launch_description():
             value=resource_path,
         ),
         gazebo,
-        clock_bridge,
+        bridge,
         OpaqueFunction(
             function=create_robot_actions,
         ),
