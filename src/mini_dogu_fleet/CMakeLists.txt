@@ -8,6 +8,7 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(mini_dogu_interfaces REQUIRED)
+find_package(std_srvs REQUIRED)
 
 add_executable(
   fleet_manager_node
@@ -29,6 +30,13 @@ ament_target_dependencies(
   robot_heartbeat_node
   rclcpp
   mini_dogu_interfaces
+)
+
+ament_target_dependencies(
+  fleet_manager_node
+  rclcpp
+  mini_dogu_interfaces
+  std_srvs
 )
 
 install(

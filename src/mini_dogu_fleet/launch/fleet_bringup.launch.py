@@ -12,6 +12,7 @@ def generate_launch_description():
             {
                 "robot_ids": ["robot1", "robot2"],
                 "heartbeat_timeout_seconds": 3.0,
+                "patrol_robot": "robot1",
             }
         ],
     )
