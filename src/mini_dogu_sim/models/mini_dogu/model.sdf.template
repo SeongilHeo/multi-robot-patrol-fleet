@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <sdf version="1.9">
-  <model name="mini_dogu">
+  <model name="@ROBOT_NAME@">
 
     <pose>0 0 0.11 0 0 0</pose>
 
@@ -43,7 +43,7 @@
       <sensor name="lidar" type="gpu_lidar">
         <pose>0.15 0 0.36 0 0 0</pose>
 
-        <topic>/robot1/scan</topic>
+        <topic>/@ROBOT_NAME@/scan</topic>
 
         <update_rate>5</update_rate>
         <always_on>true</always_on>
@@ -76,7 +76,7 @@
     </link>
 
     <link name="left_wheel">
-      <pose>0 0.23 0.10 1.570796 0 0</pose>
+      <pose>0 0.23 0.10 0 0 0</pose>
 
       <inertial>
         <mass>1.0</mass>
@@ -84,10 +84,14 @@
           <ixx>0.005</ixx>
           <iyy>0.005</iyy>
           <izz>0.005</izz>
+          <ixy>0.0</ixy>
+          <ixz>0.0</ixz>
+          <iyz>0.0</iyz>
         </inertia>
       </inertial>
 
       <collision name="collision">
+        <pose>0 0 0 1.57079632679 0 0</pose>
         <geometry>
           <cylinder>
             <radius>0.10</radius>
@@ -97,6 +101,7 @@
       </collision>
 
       <visual name="visual">
+        <pose>0 0 0 1.57079632679 0 0</pose>
         <geometry>
           <cylinder>
             <radius>0.10</radius>
@@ -107,7 +112,7 @@
     </link>
 
     <link name="right_wheel">
-      <pose>0 -0.23 0.10 1.570796 0 0</pose>
+      <pose>0 -0.23 0.10 0 0 0</pose>
 
       <inertial>
         <mass>1.0</mass>
@@ -115,10 +120,14 @@
           <ixx>0.005</ixx>
           <iyy>0.005</iyy>
           <izz>0.005</izz>
+          <ixy>0.0</ixy>
+          <ixz>0.0</ixz>
+          <iyz>0.0</iyz>
         </inertia>
       </inertial>
 
       <collision name="collision">
+        <pose>0 0 0 1.57079632679 0 0</pose>
         <geometry>
           <cylinder>
             <radius>0.10</radius>
@@ -128,6 +137,7 @@
       </collision>
 
       <visual name="visual">
+        <pose>0 0 0 1.57079632679 0 0</pose>
         <geometry>
           <cylinder>
             <radius>0.10</radius>
@@ -177,12 +187,12 @@
       <wheel_separation>0.46</wheel_separation>
       <wheel_radius>0.10</wheel_radius>
 
-      <topic>/robot1/cmd_vel</topic>
-      <odom_topic>/robot1/odom</odom_topic>
-      <tf_topic>/robot1/tf</tf_topic>
+      <topic>/@ROBOT_NAME@/cmd_vel</topic>
+      <odom_topic>/@ROBOT_NAME@/odom</odom_topic>
+      <tf_topic>/@ROBOT_NAME@/tf</tf_topic>
 
-      <frame_id>robot1/odom</frame_id>
-      <child_frame_id>robot1/base_link</child_frame_id>
+      <frame_id>@ROBOT_NAME@/odom</frame_id>
+      <child_frame_id>@ROBOT_NAME@/base_link</child_frame_id>
 
       <odom_publish_frequency>30</odom_publish_frequency>
 
