@@ -44,7 +44,6 @@
         <pose>0.15 0 0.36 0 0 0</pose>
 
         <topic>/robot1/scan</topic>
-        <gz_frame_id>robot1/lidar_link</gz_frame_id>
 
         <update_rate>5</update_rate>
         <always_on>true</always_on>

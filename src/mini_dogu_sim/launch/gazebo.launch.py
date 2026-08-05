@@ -30,29 +30,29 @@ def generate_launch_description():
         "",
     )
 
-    gazebo_resource_path = (
+    resource_path = (
         model_path
         if not existing_resource_path
         else model_path + os.pathsep + existing_resource_path
     )
 
-    gazebo_server = IncludeLaunchDescription(
+    gazebo = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(
                 ros_gz_sim_share,
                 "launch",
-                "gz_server.launch.py",
+                "gz_sim.launch.py",
             )
         ),
         launch_arguments={
-            "world_sdf_file": world_file,
+            "gz_args": f"-r {world_file}",
         }.items(),
     )
 
     return LaunchDescription([
         SetEnvironmentVariable(
-            name="GZ_SIM_RESOURCE_PATH",
-            value=gazebo_resource_path,
+            "GZ_SIM_RESOURCE_PATH",
+            resource_path,
         ),
-        gazebo_server,
+        gazebo,
     ])
