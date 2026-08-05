@@ -1,13 +1,6 @@
 patrol_manager:
   ros__parameters:
-    use_sim_time: true
-
-    robot_namespace: robot1
-    frame_id: robot1/map
-
-    autostart: false
     server_wait_timeout: 15.0
-
     number_of_loops: 0
     goal_index: 0
 
@@ -15,15 +8,12 @@ patrol_manager:
       - 0.5
       - 0.0
       - 0.0
-
       - 0.5
       - 0.5
       - 1.57079632679
-
       - 0.0
       - 0.5
       - 3.14159265359
-
       - 0.0
       - 0.0
       - -1.57079632679
