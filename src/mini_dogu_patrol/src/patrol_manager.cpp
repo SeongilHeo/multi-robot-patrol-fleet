@@ -221,6 +221,8 @@ void PatrolManager::start_patrol()
     action_name_.c_str());
 
   if (!action_client_->wait_for_action_server(wait_duration)) {
+    publish_status("error");
+
     RCLCPP_ERROR(
       this->get_logger(),
       "FollowWaypoints action server was not available after %.1f seconds",
@@ -235,6 +237,8 @@ void PatrolManager::start_patrol()
   try {
     goal.poses = build_waypoints();
   } catch (const std::exception & error) {
+    publish_status("error");
+
     RCLCPP_ERROR(
       this->get_logger(),
       "Invalid waypoint configuration: %s",
@@ -243,6 +247,8 @@ void PatrolManager::start_patrol()
   }
 
   if (number_of_loops_ < 0 || goal_index_ < 0) {
+    publish_status("error");
+
     RCLCPP_ERROR(
       this->get_logger(),
       "number_of_loops and goal_index cannot be negative");
@@ -252,6 +258,8 @@ void PatrolManager::start_patrol()
   if (
     static_cast<std::size_t>(goal_index_) >= goal.poses.size())
   {
+    publish_status("error");
+
     RCLCPP_ERROR(
       this->get_logger(),
       "goal_index %ld exceeds waypoint count %zu",
