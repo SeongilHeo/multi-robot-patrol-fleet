@@ -20,6 +20,7 @@
 #include "mini_dogu_interfaces/msg/robot_heartbeat.hpp"
 #include "mini_dogu_interfaces/srv/assign_mission.hpp"
 #include "mini_dogu_interfaces/srv/queue_mission.hpp"
+#include "mini_dogu_interfaces/srv/cancel_mission.hpp"
 
 using namespace std::chrono_literals;
 
@@ -43,6 +44,9 @@ public:
 
   using Trigger =
     std_srvs::srv::Trigger;
+
+using CancelMission =
+  mini_dogu_interfaces::srv::CancelMission;
 
   MissionSchedulerNode()
   : Node("mission_scheduler")
@@ -98,6 +102,15 @@ public:
       "/scheduler/queue_mission",
       std::bind(
         &MissionSchedulerNode::handle_queue_mission,
+        this,
+        std::placeholders::_1,
+        std::placeholders::_2));
+
+    cancel_mission_service_ =
+      create_service<CancelMission>(
+      "/scheduler/cancel_mission",
+      std::bind(
+        &MissionSchedulerNode::handle_cancel_mission,
         this,
         std::placeholders::_1,
         std::placeholders::_2));
@@ -294,6 +307,65 @@ private:
       mission_id.c_str(),
       request->mission_type.c_str(),
       request->priority);
+  }
+
+  void handle_cancel_mission(
+    const std::shared_ptr<CancelMission::Request> request,
+    std::shared_ptr<CancelMission::Response> response)
+  {
+    if (request->mission_id.empty()) {
+      response->success = false;
+      response->message =
+        "mission_id cannot be empty";
+      return;
+    }
+
+    bool removed = false;
+
+    {
+      std::lock_guard<std::mutex> lock(queue_mutex_);
+
+      const auto iterator =
+        std::find_if(
+          mission_queue_.begin(),
+          mission_queue_.end(),
+          [&request](const QueuedMission & mission)
+          {
+            return mission.mission_id ==
+                  request->mission_id;
+          });
+
+      if (iterator != mission_queue_.end()) {
+        mission_queue_.erase(iterator);
+        removed = true;
+      }
+    }
+
+    if (!removed) {
+      response->success = false;
+      response->message =
+        "Pending mission not found: " +
+        request->mission_id;
+
+      RCLCPP_WARN(
+        get_logger(),
+        "%s",
+        response->message.c_str());
+
+      return;
+    }
+
+    publish_queue_state();
+
+    response->success = true;
+    response->message =
+      "Pending mission canceled: " +
+      request->mission_id;
+
+    RCLCPP_INFO(
+      get_logger(),
+      "%s",
+      response->message.c_str());
   }
 
   void handle_dispatch_patrol(
@@ -607,6 +679,9 @@ private:
 
   rclcpp::Service<QueueMission>::SharedPtr
     queue_mission_service_;
+
+  rclcpp::Service<CancelMission>::SharedPtr
+    cancel_mission_service_;
 
   rclcpp::Service<Trigger>::SharedPtr
     dispatch_patrol_service_;

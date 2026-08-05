@@ -18,6 +18,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
 
   "srv/AssignMission.srv"
   "srv/QueueMission.srv"
+  "srv/CancelMission.srv"
 
   DEPENDENCIES builtin_interfaces
 )
