@@ -98,7 +98,6 @@ PatrolManager::PatrolManager(const rclcpp::NodeOptions & options)
     action_name_.c_str());
 
   if (autostart_) {
-    // Constructor가 끝난 뒤 action 요청을 시작한다.
     start_timer_ = this->create_wall_timer(
       1s,
       [this]() {

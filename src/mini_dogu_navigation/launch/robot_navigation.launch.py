@@ -19,8 +19,6 @@ def generate_launch_description():
     params_file = LaunchConfiguration("params_file")
     log_level = LaunchConfiguration("log_level")
 
-    # YAML의 controller_server, planner_server 같은 최상위 키를
-    # /robot1/controller_server 등의 namespace 아래에 적용한다.
     configured_params = ParameterFile(
         RewrittenYaml(
             source_file=params_file,
