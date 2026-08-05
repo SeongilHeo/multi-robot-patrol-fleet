@@ -27,8 +27,8 @@ def generate_launch_description():
             {
                 "robot_id": "robot1",
                 "battery_percentage": 90.0,
-                "state": 1,
-                "current_mission": "",
+                "default_state": 1,
+                "default_mission": "",
             }
         ],
     )
@@ -43,8 +43,8 @@ def generate_launch_description():
             {
                 "robot_id": "robot2",
                 "battery_percentage": 80.0,
-                "state": 2,
-                "current_mission": "mapping_zone_b",
+                "default_state": 1,
+                "default_mission": "",
             }
         ],
     )

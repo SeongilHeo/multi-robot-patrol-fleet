@@ -9,7 +9,6 @@
 
 #include "rclcpp/rclcpp.hpp"
 #include "std_srvs/srv/trigger.hpp"
-#include "std_msgs/msg/string.hpp"
 
 #include "mini_dogu_interfaces/msg/fleet_robot_state.hpp"
 #include "mini_dogu_interfaces/msg/fleet_state.hpp"
@@ -75,9 +74,7 @@ private:
         rclcpp::Time last_heartbeat{
             0,
             0,
-            RCL_ROS_TIME};
-        
-        std::string patrol_status{"idle"};
+            RCL_ROS_TIME};        
     };
 
     void configure_robot_monitoring()
@@ -114,35 +111,6 @@ private:
                 "Monitoring heartbeat for robot '%s' on '%s'",
                 robot_id.c_str(),
                 heartbeat_topic.c_str());
-
-            // Patrol status subscription
-            const std::string patrol_status_topic =
-                "/" + robot_id + "/patrol/status";
-
-            rclcpp::QoS patrol_status_qos(1);
-            patrol_status_qos.reliable();
-            patrol_status_qos.transient_local();
-
-            auto patrol_status_subscription =
-                create_subscription<std_msgs::msg::String>(
-                    patrol_status_topic,
-                    patrol_status_qos,
-                    [this, robot_id](
-                        const std_msgs::msg::String::SharedPtr message)
-                    {
-                        patrol_status_callback(
-                            robot_id,
-                            message->data);
-                    });
-
-            patrol_status_subscriptions_.push_back(
-                patrol_status_subscription);
-
-            RCLCPP_INFO(
-                get_logger(),
-                "Monitoring patrol status for robot '%s' on '%s'",
-                robot_id.c_str(),
-                patrol_status_topic.c_str());
         }
     }
 
@@ -240,19 +208,12 @@ private:
         }
 
         record.received_heartbeat = true;
+        record.state = message.state;
         record.battery_percentage =
             message.battery_percentage;
+        record.current_mission =
+            message.current_mission;
         record.last_heartbeat = now();
-
-        if (
-            record.patrol_status == "idle" ||
-            record.patrol_status == "completed" ||
-            record.patrol_status == "canceled")
-        {
-            record.state = message.state;
-            record.current_mission =
-                message.current_mission;
-        }
     }
 
     void handle_dispatch_patrol(
@@ -581,62 +542,6 @@ private:
             "; final status is available on /fleet/state";
     }
 
-    void patrol_status_callback(
-        const std::string & robot_id,
-        const std::string & status)
-    {
-        std::lock_guard<std::mutex> lock(records_mutex_);
-
-        const auto iterator = records_.find(robot_id);
-
-        if (iterator == records_.end())
-        {
-            RCLCPP_WARN(
-                get_logger(),
-                "Patrol status received for unknown robot '%s'",
-                robot_id.c_str());
-            return;
-        }
-
-        auto & record = iterator->second;
-        record.patrol_status = status;
-
-        using RobotHeartbeat =
-            mini_dogu_interfaces::msg::RobotHeartbeat;
-
-        if (
-            status == "waiting_for_nav2" ||
-            status == "sending_goal" ||
-            status == "active" ||
-            status == "canceling")
-        {
-            record.state = RobotHeartbeat::STATE_PATROLLING;
-            record.current_mission = "patrol";
-        }
-        else if (
-            status == "idle" ||
-            status == "completed" ||
-            status == "canceled")
-        {
-            record.state = RobotHeartbeat::STATE_IDLE;
-            record.current_mission.clear();
-        }
-        else if (
-            status == "aborted" ||
-            status == "rejected" ||
-            status == "error")
-        {
-            record.state = RobotHeartbeat::STATE_ERROR;
-            record.current_mission = "patrol";
-        }
-
-        RCLCPP_INFO(
-            get_logger(),
-            "Robot '%s' patrol status changed to '%s'",
-            robot_id.c_str(),
-            status.c_str());
-    }
-
     std::vector<std::string> robot_ids_;
     double heartbeat_timeout_seconds_;
     std::string patrol_robot_;
@@ -649,10 +554,6 @@ private:
             mini_dogu_interfaces::msg::
                 RobotHeartbeat>::SharedPtr>
         heartbeat_subscriptions_;
-
-    std::vector<
-        rclcpp::Subscription<std_msgs::msg::String>::SharedPtr>
-        patrol_status_subscriptions_;
 
     std::unordered_map<
         std::string,

@@ -5,6 +5,7 @@
 #include <string>
 
 #include "rclcpp/rclcpp.hpp"
+#include "std_msgs/msg/string.hpp"
 
 #include "mini_dogu_interfaces/msg/robot_heartbeat.hpp"
 
@@ -13,8 +14,11 @@ using namespace std::chrono_literals;
 class RobotHeartbeatNode : public rclcpp::Node
 {
 public:
+  using RobotHeartbeat =
+    mini_dogu_interfaces::msg::RobotHeartbeat;
+
   RobotHeartbeatNode()
-    : Node("robot_heartbeat")
+  : Node("robot_heartbeat")
   {
     robot_id_ = declare_parameter<std::string>(
       "robot_id",
@@ -24,73 +28,165 @@ public:
       "battery_percentage",
       100.0);
 
-    state_ = declare_parameter<int>(
-      "state",
-      mini_dogu_interfaces::msg::RobotHeartbeat::STATE_IDLE);
+    default_state_ = declare_parameter<int>(
+      "default_state",
+      RobotHeartbeat::STATE_IDLE);
 
-    current_mission_ = declare_parameter<std::string>(
-      "current_mission",
+    default_mission_ = declare_parameter<std::string>(
+      "default_mission",
       "");
 
+    state_ = clamp_state(default_state_);
+    current_mission_ = default_mission_;
+
     publisher_ =
-      create_publisher<mini_dogu_interfaces::msg::RobotHeartbeat>(
+      create_publisher<RobotHeartbeat>(
         "heartbeat",
         rclcpp::QoS(10).reliable());
 
+    rclcpp::QoS patrol_status_qos(1);
+    patrol_status_qos.reliable();
+    patrol_status_qos.transient_local();
+
+    patrol_status_subscription_ =
+      create_subscription<std_msgs::msg::String>(
+        "patrol/status",
+        patrol_status_qos,
+        std::bind(
+          &RobotHeartbeatNode::patrol_status_callback,
+          this,
+          std::placeholders::_1));
+
     timer_ = create_wall_timer(
       1s,
-      std::bind(&RobotHeartbeatNode::publish_heartbeat, this));
+      std::bind(
+        &RobotHeartbeatNode::publish_heartbeat,
+        this));
 
     RCLCPP_INFO(
       get_logger(),
-      "Heartbeat publisher started for robot '%s'",
+      "Heartbeat state aggregator started for robot '%s'",
+      robot_id_.c_str());
+
+    RCLCPP_INFO(
+      get_logger(),
+      "Monitoring patrol status on '/%s/patrol/status'",
       robot_id_.c_str());
   }
 
 private:
+  static uint8_t clamp_state(int state)
+  {
+    return static_cast<uint8_t>(
+      std::clamp(
+        state,
+        static_cast<int>(
+          RobotHeartbeat::STATE_UNKNOWN),
+        static_cast<int>(
+          RobotHeartbeat::STATE_ERROR)));
+  }
+
+  void patrol_status_callback(
+    const std_msgs::msg::String::SharedPtr message)
+  {
+    const std::string & status = message->data;
+
+    if (
+      status == "waiting_for_nav2" ||
+      status == "sending_goal" ||
+      status == "active" ||
+      status == "canceling")
+    {
+      state_ = RobotHeartbeat::STATE_PATROLLING;
+      current_mission_ = "patrol";
+    }
+    else if (
+      status == "idle" ||
+      status == "completed" ||
+      status == "canceled")
+    {
+      state_ = RobotHeartbeat::STATE_IDLE;
+      current_mission_.clear();
+    }
+    else if (
+      status == "aborted" ||
+      status == "rejected" ||
+      status == "error")
+    {
+      state_ = RobotHeartbeat::STATE_ERROR;
+      current_mission_ = "patrol";
+    }
+    else
+    {
+      RCLCPP_WARN(
+        get_logger(),
+        "Unknown patrol status '%s' for robot '%s'",
+        status.c_str(),
+        robot_id_.c_str());
+
+      return;
+    }
+
+    RCLCPP_INFO(
+      get_logger(),
+      "Robot '%s' local state updated from patrol status '%s'",
+      robot_id_.c_str(),
+      status.c_str());
+  }
+
   void publish_heartbeat()
   {
-    mini_dogu_interfaces::msg::RobotHeartbeat message;
+    RobotHeartbeat message;
 
     message.robot_id = robot_id_;
     message.stamp = now();
 
-    message.state = static_cast<uint8_t>(
-      std::clamp(
-        state_,
-        static_cast<int>(
-          mini_dogu_interfaces::msg::RobotHeartbeat::STATE_UNKNOWN),
-        static_cast<int>(
-          mini_dogu_interfaces::msg::RobotHeartbeat::STATE_ERROR)));
+    message.state = state_;
 
-    message.battery_percentage = static_cast<float>(
-      std::clamp(battery_percentage_, 0.0, 100.0));
+    message.battery_percentage =
+      static_cast<float>(
+        std::clamp(
+          battery_percentage_,
+          0.0,
+          100.0));
 
-    message.current_mission = current_mission_;
+    message.current_mission =
+      current_mission_;
 
     publisher_->publish(message);
   }
 
   std::string robot_id_;
   double battery_percentage_;
-  int state_;
+
+  int default_state_;
+  std::string default_mission_;
+
+  uint8_t state_{
+    RobotHeartbeat::STATE_UNKNOWN};
+
   std::string current_mission_;
 
-  rclcpp::Publisher<
-    mini_dogu_interfaces::msg::RobotHeartbeat>::SharedPtr publisher_;
+  rclcpp::Publisher<RobotHeartbeat>::SharedPtr
+    publisher_;
+
+  rclcpp::Subscription<std_msgs::msg::String>::SharedPtr
+    patrol_status_subscription_;
 
   rclcpp::TimerBase::SharedPtr timer_;
 };
 
-int main(int argc, char* argv[])
+
+int main(int argc, char * argv[])
 {
   rclcpp::init(argc, argv);
 
   try
   {
-    rclcpp::spin(std::make_shared<RobotHeartbeatNode>());
+    rclcpp::spin(
+      std::make_shared<RobotHeartbeatNode>());
   }
-  catch (const std::exception& exception)
+  catch (const std::exception & exception)
   {
     RCLCPP_FATAL(
       rclcpp::get_logger("robot_heartbeat"),

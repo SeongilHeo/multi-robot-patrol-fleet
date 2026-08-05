@@ -25,6 +25,7 @@ ament_target_dependencies(
   robot_heartbeat_node
   rclcpp
   mini_dogu_interfaces
+  std_msgs
 )
 
 ament_target_dependencies(
@@ -32,7 +33,6 @@ ament_target_dependencies(
   rclcpp
   mini_dogu_interfaces
   std_srvs
-  std_msgs
 )
 
 install(
