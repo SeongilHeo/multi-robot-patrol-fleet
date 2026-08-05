@@ -88,6 +88,34 @@ private:
             record.robot_id = robot_id;
             records_.emplace(robot_id, record);
 
+            // Heartbeat subscription
+            const std::string heartbeat_topic =
+                "/" + robot_id + "/heartbeat";
+
+            auto heartbeat_subscription =
+                create_subscription<
+                    mini_dogu_interfaces::msg::RobotHeartbeat>(
+                    heartbeat_topic,
+                    rclcpp::QoS(10).reliable(),
+                    [this, robot_id](
+                        const mini_dogu_interfaces::msg::
+                            RobotHeartbeat::SharedPtr message)
+                    {
+                        heartbeat_callback(
+                            robot_id,
+                            *message);
+                    });
+
+            heartbeat_subscriptions_.push_back(
+                heartbeat_subscription);
+
+            RCLCPP_INFO(
+                get_logger(),
+                "Monitoring heartbeat for robot '%s' on '%s'",
+                robot_id.c_str(),
+                heartbeat_topic.c_str());
+
+            // Patrol status subscription
             const std::string patrol_status_topic =
                 "/" + robot_id + "/patrol/status";
 

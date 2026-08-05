@@ -16,12 +16,6 @@ add_executable(
   src/fleet_manager_node.cpp
 )
 
-ament_target_dependencies(
-  fleet_manager_node
-  rclcpp
-  mini_dogu_interfaces
-)
-
 add_executable(
   robot_heartbeat_node
   src/robot_heartbeat_node.cpp
@@ -31,13 +25,6 @@ ament_target_dependencies(
   robot_heartbeat_node
   rclcpp
   mini_dogu_interfaces
-)
-
-ament_target_dependencies(
-  fleet_manager_node
-  rclcpp
-  mini_dogu_interfaces
-  std_srvs
 )
 
 ament_target_dependencies(
