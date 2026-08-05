@@ -118,7 +118,7 @@ def generate_launch_description():
         actions=[
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(
-                    patrol_launch
+                    navigation_launch
                 ),
                 launch_arguments={
                     "use_sim_time": use_sim_time,
@@ -135,6 +135,10 @@ def generate_launch_description():
                 PythonLaunchDescriptionSource(
                     patrol_launch
                 ),
+                launch_arguments={
+                    "use_sim_time": use_sim_time,
+                    "autostart": start_patrol,
+                }.items(),
             )
         ],
     )
