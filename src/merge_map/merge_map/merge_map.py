@@ -55,20 +55,40 @@ class MergeMapNode(Node):
 
         # Create subscriptions dynamically
         for i in range(self.robot_count):
-            topic = f'/tb{i + 1}/map'
+            topic = f'/robot{i + 1}/map'
+
+            self.get_logger().info(
+                f"Subscribing to {topic}"
+            )
+
             self.create_subscription(
-                OccupancyGrid, topic, lambda msg, idx=i: self.map_callback(msg, idx), qos
+                OccupancyGrid,
+                topic,
+                lambda msg, idx=i: self.map_callback(msg, idx),
+                qos,
             )
 
     def map_callback(self, msg, index):
+        self.get_logger().info(
+            f"Received map from robot{index+1}"
+        )
+
         self.maps[index] = msg
         self.try_merge_and_publish()
 
     def try_merge_and_publish(self):
         if all(self.maps):  # Ensure all maps are available
-            merged_map = merge_maps(self.maps, self.frame_id)
-            self.publisher.publish(merged_map)
-            # self.get_logger().info('Merged map published!')
+
+            merged_map = merge_maps(
+                self.maps, 
+                self.frame_id
+            )
+            self.publisher.publish(
+                merged_map
+            )
+            self.get_logger().info(
+                'Merged map published!'
+            )
 
 def main(args=None):
     rclpy.init(args=args)
