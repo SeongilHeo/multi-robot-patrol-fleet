@@ -14,12 +14,17 @@
 #include "mini_dogu_interfaces/msg/fleet_state.hpp"
 #include "mini_dogu_interfaces/msg/robot_heartbeat.hpp"
 
+#include "mini_dogu_interfaces/srv/assign_mission.hpp"
+
 using namespace std::chrono_literals;
 
 class FleetManagerNode : public rclcpp::Node
 {
 public:
     using Trigger = std_srvs::srv::Trigger;
+
+    using AssignMission =
+    mini_dogu_interfaces::srv::AssignMission;
 
     FleetManagerNode()
         : Node("fleet_manager")
@@ -107,16 +112,42 @@ private:
 
     void configure_patrol_control()
     {
-        const std::string patrol_prefix =
-            "/" + patrol_robot_ + "/patrol";
+        for (const auto & robot_id : robot_ids_)
+        {
+            const std::string patrol_prefix =
+                "/" + robot_id + "/patrol";
 
+            patrol_start_clients_.emplace(
+                robot_id,
+                create_client<Trigger>(
+                    patrol_prefix + "/start"));
+
+            patrol_stop_clients_.emplace(
+                robot_id,
+                create_client<Trigger>(
+                    patrol_prefix + "/stop"));
+
+            RCLCPP_INFO(
+                get_logger(),
+                "Configured patrol clients for robot '%s'",
+                robot_id.c_str());
+        }
+
+        assign_mission_service_ =
+            create_service<AssignMission>(
+                "/fleet/assign_mission",
+                std::bind(
+                    &FleetManagerNode::handle_assign_mission,
+                    this,
+                    std::placeholders::_1,
+                    std::placeholders::_2));
+
+        // Existing Trigger-based compatible interface
         patrol_start_client_ =
-            create_client<Trigger>(
-                patrol_prefix + "/start");
+            patrol_start_clients_.at(patrol_robot_);
 
         patrol_stop_client_ =
-            create_client<Trigger>(
-                patrol_prefix + "/stop");
+            patrol_stop_clients_.at(patrol_robot_);
 
         dispatch_patrol_service_ =
             create_service<Trigger>(
@@ -138,18 +169,7 @@ private:
 
         RCLCPP_INFO(
             get_logger(),
-            "Fleet patrol control configured for robot '%s'",
-            patrol_robot_.c_str());
-
-        RCLCPP_INFO(
-            get_logger(),
-            "Patrol start client: %s/start",
-            patrol_prefix.c_str());
-
-        RCLCPP_INFO(
-            get_logger(),
-            "Patrol stop client: %s/stop",
-            patrol_prefix.c_str());
+            "Mission assignment service ready at /fleet/assign_mission");
     }
 
     void heartbeat_callback(
@@ -225,6 +245,7 @@ private:
 
         call_patrol_service(
             patrol_start_client_,
+            patrol_robot_,
             "start");
 
         response->success = true;
@@ -253,6 +274,7 @@ private:
 
         call_patrol_service(
             patrol_stop_client_,
+            patrol_robot_,
             "stop");
 
         response->success = true;
@@ -263,6 +285,7 @@ private:
 
     void call_patrol_service(
         const rclcpp::Client<Trigger>::SharedPtr & client,
+        const std::string & robot_id,
         const std::string & operation)
     {
         auto request =
@@ -270,7 +293,7 @@ private:
 
         client->async_send_request(
             request,
-            [this, operation](
+            [this, robot_id, operation](
                 rclcpp::Client<Trigger>::SharedFuture future)
             {
                 try
@@ -281,7 +304,8 @@ private:
                     {
                         RCLCPP_INFO(
                             get_logger(),
-                            "Patrol %s succeeded: %s",
+                            "Robot '%s' patrol %s succeeded: %s",
+                            robot_id.c_str(),
                             operation.c_str(),
                             response->message.c_str());
                     }
@@ -289,7 +313,8 @@ private:
                     {
                         RCLCPP_WARN(
                             get_logger(),
-                            "Patrol %s rejected: %s",
+                            "Robot '%s' patrol %s rejected: %s",
+                            robot_id.c_str(),
                             operation.c_str(),
                             response->message.c_str());
                     }
@@ -298,7 +323,8 @@ private:
                 {
                     RCLCPP_ERROR(
                         get_logger(),
-                        "Patrol %s service call failed: %s",
+                        "Robot '%s' patrol %s failed: %s",
+                        robot_id.c_str(),
                         operation.c_str(),
                         exception.what());
                 }
@@ -393,6 +419,123 @@ private:
         fleet_state_publisher_->publish(fleet_message);
     }
 
+    void handle_assign_mission(
+        const std::shared_ptr<AssignMission::Request> request,
+        std::shared_ptr<AssignMission::Response> response)
+    {
+        if (records_.find(request->robot_id) == records_.end())
+        {
+            response->success = false;
+            response->message =
+                "Unknown robot_id: " + request->robot_id;
+            return;
+        }
+
+        if (request->mission_type != "patrol")
+        {
+            response->success = false;
+            response->message =
+                "Unsupported mission_type: " +
+                request->mission_type;
+            return;
+        }
+
+        if (
+            request->command !=
+                AssignMission::Request::COMMAND_START &&
+            request->command !=
+                AssignMission::Request::COMMAND_STOP)
+        {
+            response->success = false;
+            response->message =
+                "Unsupported mission command";
+            return;
+        }
+
+        if (
+            request->command ==
+            AssignMission::Request::COMMAND_START)
+        {
+            if (!is_robot_online(request->robot_id))
+            {
+                response->success = false;
+                response->message =
+                    "Robot '" + request->robot_id +
+                    "' is offline";
+                return;
+            }
+
+            const auto client_iterator =
+                patrol_start_clients_.find(
+                    request->robot_id);
+
+            if (
+                client_iterator ==
+                patrol_start_clients_.end())
+            {
+                response->success = false;
+                response->message =
+                    "No patrol start client for " +
+                    request->robot_id;
+                return;
+            }
+
+            if (!client_iterator->second->service_is_ready())
+            {
+                response->success = false;
+                response->message =
+                    "Patrol start service unavailable for " +
+                    request->robot_id;
+                return;
+            }
+
+            call_patrol_service(
+                client_iterator->second,
+                request->robot_id,
+                "start");
+
+            response->success = true;
+            response->message =
+                "Patrol start request sent to " +
+                request->robot_id;
+            return;
+        }
+
+        const auto client_iterator =
+            patrol_stop_clients_.find(
+                request->robot_id);
+
+        if (
+            client_iterator ==
+            patrol_stop_clients_.end())
+        {
+            response->success = false;
+            response->message =
+                "No patrol stop client for " +
+                request->robot_id;
+            return;
+        }
+
+        if (!client_iterator->second->service_is_ready())
+        {
+            response->success = false;
+            response->message =
+                "Patrol stop service unavailable for " +
+                request->robot_id;
+            return;
+        }
+
+        call_patrol_service(
+            client_iterator->second,
+            request->robot_id,
+            "stop");
+
+        response->success = true;
+        response->message =
+            "Patrol stop request sent to " +
+            request->robot_id;
+    }
+
     std::vector<std::string> robot_ids_;
     double heartbeat_timeout_seconds_;
     std::string patrol_robot_;
@@ -405,7 +548,20 @@ private:
             mini_dogu_interfaces::msg::
                 RobotHeartbeat>::SharedPtr>
         heartbeat_subscriptions_;
-        
+
+    std::unordered_map<
+        std::string,
+        rclcpp::Client<Trigger>::SharedPtr>
+        patrol_start_clients_;
+
+    std::unordered_map<
+        std::string,
+        rclcpp::Client<Trigger>::SharedPtr>
+        patrol_stop_clients_;
+
+    rclcpp::Service<AssignMission>::SharedPtr
+        assign_mission_service_;
+
     rclcpp::Publisher<
         mini_dogu_interfaces::msg::FleetState>::SharedPtr
         fleet_state_publisher_;
