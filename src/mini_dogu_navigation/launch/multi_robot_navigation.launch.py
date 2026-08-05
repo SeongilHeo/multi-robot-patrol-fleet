@@ -6,7 +6,6 @@ from launch import LaunchDescription
 from launch.actions import (
     DeclareLaunchArgument,
     IncludeLaunchDescription,
-    TimerAction,
 )
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
@@ -51,21 +50,16 @@ def generate_launch_description():
     )
 
     # Start slightly later to separate the initialization load and logs.
-    robot2_navigation = TimerAction(
-        period=2.0,
-        actions=[
-            IncludeLaunchDescription(
-                PythonLaunchDescriptionSource(
-                    robot_navigation_launch
-                ),
-                launch_arguments={
-                    "namespace": "robot2",
-                    "use_sim_time": use_sim_time,
-                    "autostart": autostart,
-                    "params_file": robot2_params,
-                }.items(),
-            )
-        ],
+    robot2_navigation = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            robot_navigation_launch
+        ),
+        launch_arguments={
+            "namespace": "robot2",
+            "use_sim_time": use_sim_time,
+            "autostart": autostart,
+            "params_file": robot2_params,
+        }.items(),
     )
 
     return LaunchDescription([
@@ -76,7 +70,7 @@ def generate_launch_description():
 
         DeclareLaunchArgument(
             "autostart",
-            default_value="true",
+            default_value="false",
         ),
 
         robot1_navigation,

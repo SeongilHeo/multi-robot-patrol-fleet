@@ -6,7 +6,6 @@ from launch import LaunchDescription
 from launch.actions import (
     DeclareLaunchArgument,
     IncludeLaunchDescription,
-    TimerAction,
 )
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
@@ -77,85 +76,75 @@ def generate_launch_description():
         "scheduler.launch.py",
     )
 
+    supervisor_launch = os.path.join(
+        bringup_share,
+        "launch",
+        "system_supervisor.launch.py",
+    )
+
     simulation = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             simulation_launch
         ),
     )
 
-    system_bringup = TimerAction(
-        period=3.0,
-        actions=[
-            IncludeLaunchDescription(
-                PythonLaunchDescriptionSource(
-                    system_bringup_launch
-                ),
-                launch_arguments={
-                    "use_sim_time": use_sim_time,
-                }.items(),
-            )
-        ],
+    system_bringup = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            system_bringup_launch
+        ),
+        launch_arguments={
+            "use_sim_time": use_sim_time,
+        }.items(),
     )
 
-    map_merge = TimerAction(
-        period=7.0,
-        actions=[
-            IncludeLaunchDescription(
-                PythonLaunchDescriptionSource(
-                    merge_map_launch
-                ),
-                launch_arguments={
-                    "robot_count": "2",
-                    "frame_id": "merged_map",
-                    "use_sim_time": use_sim_time,
-                }.items(),
-            )
-        ],
+    map_merge = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            merge_map_launch
+        ),
+        launch_arguments={
+            "robot_count": "2",
+            "frame_id": "merged_map",
+            "use_sim_time": use_sim_time,
+        }.items(),
     )
 
-    navigation = TimerAction(
-        period=10.0,
-        actions=[
-            IncludeLaunchDescription(
-                PythonLaunchDescriptionSource(
-                    navigation_launch
-                ),
-                launch_arguments={
-                    "use_sim_time": use_sim_time,
-                    "autostart": start_navigation,
-                }.items(),
-            )
-        ],
+    navigation = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            navigation_launch
+        ),
+        launch_arguments={
+            "use_sim_time": use_sim_time,
+            "autostart": "false",
+        }.items(),
     )
 
-    patrol = TimerAction(
-        period=13.0,
-        actions=[
-            IncludeLaunchDescription(
-                PythonLaunchDescriptionSource(
-                    patrol_launch
-                ),
-                launch_arguments={
-                    "use_sim_time": use_sim_time,
-                    "autostart": start_patrol,
-                }.items(),
-            )
-        ],
+    patrol = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            patrol_launch
+        ),
+        launch_arguments={
+            "use_sim_time": use_sim_time,
+            "autostart": "false",
+        }.items(),
     )
 
-    scheduler = TimerAction(
-        period=15.0,
-        actions=[
-            IncludeLaunchDescription(
-                PythonLaunchDescriptionSource(
-                    scheduler_launch
-                ),
-                launch_arguments={
-                    "use_sim_time": use_sim_time,
-                    "minimum_battery_percentage": "20.0",
-                }.items(),
-            )
-        ],
+    scheduler = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            scheduler_launch
+        ),
+        launch_arguments={
+            "use_sim_time": use_sim_time,
+            "minimum_battery_percentage": "20.0",
+        }.items(),
+    )
+
+    supervisor = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            supervisor_launch
+        ),
+        launch_arguments={
+            "use_sim_time": use_sim_time,
+        }.items(),
     )
 
     return LaunchDescription([
@@ -165,22 +154,11 @@ def generate_launch_description():
             description="Use simulation clock",
         ),
 
-        DeclareLaunchArgument(
-            "start_navigation",
-            default_value="true",
-            description="Automatically activate Nav2",
-        ),
-
-        DeclareLaunchArgument(
-            "start_patrol",
-            default_value="false",
-            description="Automatically start patrol",
-        ),
-
         simulation,
         system_bringup,
         map_merge,
         navigation,
         patrol,
         scheduler,
+        supervisor,
     ])
