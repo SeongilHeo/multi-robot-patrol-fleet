@@ -46,7 +46,7 @@ def generate_launch_description():
     navigation_launch = os.path.join(
         navigation_share,
         "launch",
-        "robot_navigation.launch.py",
+        "multi_robot_navigation.launch.py",
     )
 
     patrol_launch = os.path.join(
@@ -98,7 +98,7 @@ def generate_launch_description():
                 ),
                 launch_arguments={
                     "use_sim_time": use_sim_time,
-                    "autostart": "false",
+                    "autostart": start_navigation,
                 }.items(),
             )
         ],

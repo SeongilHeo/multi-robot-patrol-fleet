@@ -174,7 +174,7 @@ def generate_launch_description():
             default_value=PathJoinSubstitution([
                 FindPackageShare("mini_dogu_navigation"),
                 "config",
-                "nav2_params.yaml",
+                "robot1_nav2_params.yaml",
             ]),
             description="Absolute path to the Nav2 parameter file",
         ),
