@@ -222,13 +222,13 @@ private:
           if (fleet_response->success) {
             RCLCPP_INFO(
               get_logger(),
-              "Patrol assigned to robot '%s': %s",
+              "Fleet accepted patrol request for robot '%s': %s",
               robot_id.c_str(),
               fleet_response->message.c_str());
           } else {
             RCLCPP_WARN(
               get_logger(),
-              "Fleet rejected patrol assignment for '%s': %s",
+              "Fleet rejected patrol request for robot '%s': %s",
               robot_id.c_str(),
               fleet_response->message.c_str());
           }
@@ -246,8 +246,9 @@ private:
 
     response->success = true;
     response->message =
-      "Patrol dispatch sent for robot '" +
-      selected_robot->robot_id + "'";
+      "Patrol dispatch request accepted for robot '" +
+      selected_robot->robot_id +
+      "'; final execution status is available on /fleet/state";
   }
 
   std::string fleet_state_topic_;

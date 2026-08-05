@@ -293,7 +293,7 @@ private:
 
         response->success = true;
         response->message =
-            "Patrol dispatch request sent to " +
+            "Patrol request accepted and forwarded to " +
             patrol_robot_;
     }
 
@@ -322,7 +322,7 @@ private:
 
         response->success = true;
         response->message =
-            "Patrol stop request sent to " +
+            "Patrol cancellation request accepted and forwarded to " +
             patrol_robot_;
     }
 
@@ -347,7 +347,7 @@ private:
                     {
                         RCLCPP_INFO(
                             get_logger(),
-                            "Robot '%s' patrol %s succeeded: %s",
+                            "Robot '%s' patrol %s request accepted by Patrol Manager: %s",
                             robot_id.c_str(),
                             operation.c_str(),
                             response->message.c_str());
@@ -356,7 +356,7 @@ private:
                     {
                         RCLCPP_WARN(
                             get_logger(),
-                            "Robot '%s' patrol %s rejected: %s",
+                            "Robot '%s' patrol %s request rejected by Patrol Manager: %s",
                             robot_id.c_str(),
                             operation.c_str(),
                             response->message.c_str());
@@ -539,8 +539,9 @@ private:
 
             response->success = true;
             response->message =
-                "Patrol start request sent to " +
-                request->robot_id;
+                "Mission request accepted and forwarded to " +
+                request->robot_id +
+                "; execution status is available on /fleet/state";
             return;
         }
 
@@ -575,8 +576,9 @@ private:
 
         response->success = true;
         response->message =
-            "Patrol stop request sent to " +
-            request->robot_id;
+            "Mission cancellation request accepted and forwarded to " +
+            request->robot_id +
+            "; final status is available on /fleet/state";
     }
 
     void patrol_status_callback(

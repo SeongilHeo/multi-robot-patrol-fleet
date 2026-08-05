@@ -165,7 +165,9 @@ void PatrolManager::handle_start(
   }
 
   response->success = true;
-  response->message = "Patrol mission start requested";
+  response->message =
+    "Patrol start request accepted; "
+    "execution status will be published on the patrol status topic";
 
   start_patrol();
 }
@@ -185,7 +187,9 @@ void PatrolManager::handle_stop(
   action_client_->async_cancel_goal(active_goal_handle_);
 
   response->success = true;
-  response->message = "Patrol cancellation requested";
+  response->message =
+    "Patrol cancellation request accepted; "
+    "final status will be published on the patrol status topic";
 }
 
 void PatrolManager::publish_status(const std::string & status)
