@@ -110,6 +110,11 @@ def create_robot_actions(context):
             executable="parameter_bridge",
             name=f"{robot_name}_bridge",
             output="screen",
+            parameters=[
+                {
+                    "use_sim_time": True,
+                }
+            ],
             arguments=[
                 (
                     f"/{robot_name}/cmd_vel"
@@ -137,6 +142,28 @@ def create_robot_actions(context):
             ],
         )
 
+        lidar_frame_alias = Node(
+            package="tf2_ros",
+            executable="static_transform_publisher",
+            name=f"{robot_name}_lidar_frame_alias",
+            output="screen",
+            parameters=[
+                {
+                    "use_sim_time": True,
+                }
+            ],
+            arguments=[
+                "--x", "0",
+                "--y", "0",
+                "--z", "0",
+                "--roll", "0",
+                "--pitch", "0",
+                "--yaw", "0",
+                "--frame-id", f"{robot_name}/lidar_link",
+                "--child-frame-id", f"{robot_name}/base_link/lidar",
+            ],
+        )
+
         # Gazebo가 먼저 시작된 뒤 순서대로 spawn한다.
         actions.append(
             TimerAction(
@@ -144,6 +171,7 @@ def create_robot_actions(context):
                 actions=[
                     spawn_robot,
                     robot_bridge,
+                    lidar_frame_alias,
                 ],
             )
         )
