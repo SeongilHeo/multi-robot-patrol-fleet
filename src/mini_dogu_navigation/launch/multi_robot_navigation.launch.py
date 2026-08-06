@@ -6,6 +6,7 @@ from launch import LaunchDescription
 from launch.actions import (
     DeclareLaunchArgument,
     IncludeLaunchDescription,
+    TimerAction,
 )
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
@@ -17,6 +18,8 @@ ROBOT_IDS = [
     "robot3",
     "robot4",
 ]
+
+START_INTERVAL_SECONDS = 20.0
 
 
 def generate_launch_description():
@@ -35,24 +38,31 @@ def generate_launch_description():
 
     navigation_actions = []
 
-    for robot_id in ROBOT_IDS:
+    for index, robot_id in enumerate(ROBOT_IDS):
         params_file = os.path.join(
             navigation_share,
             "config",
             f"{robot_id}_nav2_params.yaml",
         )
 
+        robot_navigation = IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(
+                robot_navigation_launch
+            ),
+            launch_arguments={
+                "namespace": robot_id,
+                "use_sim_time": use_sim_time,
+                "autostart": autostart,
+                "params_file": params_file,
+            }.items(),
+        )
+
         navigation_actions.append(
-            IncludeLaunchDescription(
-                PythonLaunchDescriptionSource(
-                    robot_navigation_launch
-                ),
-                launch_arguments={
-                    "namespace": robot_id,
-                    "use_sim_time": use_sim_time,
-                    "autostart": autostart,
-                    "params_file": params_file,
-                }.items(),
+            TimerAction(
+                period=index * START_INTERVAL_SECONDS,
+                actions=[
+                    robot_navigation,
+                ],
             )
         )
 

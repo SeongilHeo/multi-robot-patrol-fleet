@@ -7,11 +7,11 @@
 #include <utility>
 #include <vector>
 
-#include "builtin_interfaces/msg/time.hpp"
 #include "nav2_msgs/srv/manage_lifecycle_nodes.hpp"
+#include "lifecycle_msgs/srv/get_state.hpp"
+#include "lifecycle_msgs/msg/state.hpp"
 #include "nav_msgs/msg/occupancy_grid.hpp"
 #include "rclcpp/rclcpp.hpp"
-#include "rosgraph_msgs/msg/clock.hpp"
 #include "std_msgs/msg/bool.hpp"
 #include "tf2/time.hpp"
 #include "tf2_ros/buffer.h"
@@ -24,6 +24,9 @@ class SystemReadinessSupervisor : public rclcpp::Node
 public:
   using ManageLifecycleNodes =
     nav2_msgs::srv::ManageLifecycleNodes;
+
+  using GetState =
+    lifecycle_msgs::srv::GetState;
 
   SystemReadinessSupervisor()
   : Node("system_readiness_supervisor"),
@@ -58,15 +61,6 @@ public:
       "/system/ready",
       ready_qos_);
 
-    clock_subscription_ =
-      create_subscription<rosgraph_msgs::msg::Clock>(
-      "/clock",
-      rclcpp::QoS(10).best_effort(),
-      std::bind(
-        &SystemReadinessSupervisor::clock_callback,
-        this,
-        std::placeholders::_1));
-
     for (const auto & robot_id : robot_ids_) {
       robot_readiness_[robot_id] = RobotReadiness{};
 
@@ -94,6 +88,13 @@ public:
       lifecycle_clients_[robot_id] =
         create_client<ManageLifecycleNodes>(
         lifecycle_service);
+
+      const std::string controller_state_service =
+        "/" + robot_id + "/controller_server/get_state";
+
+      controller_state_clients_[robot_id] =
+        create_client<GetState>(
+        controller_state_service);
 
       RCLCPP_INFO(
         get_logger(),
@@ -129,19 +130,13 @@ private:
     bool tf_available{false};
     bool lifecycle_service_available{false};
     bool startup_requested{false};
+    bool startup_in_progress{false};
     bool startup_succeeded{false};
     rclcpp::Time last_startup_attempt{
       0,
       0,
       RCL_ROS_TIME};
   };
-
-  void clock_callback(
-    const rosgraph_msgs::msg::Clock::SharedPtr message)
-  {
-    clock_received_ = true;
-    last_clock_ = message->clock;
-  }
 
   void map_callback(
     const std::string & robot_id,
@@ -160,6 +155,15 @@ private:
 
     iterator->second.map_received = valid_map;
 
+    RCLCPP_INFO(
+      get_logger(),
+      "Map received from '%s': width=%u height=%u resolution=%.3f valid=%s",
+      robot_id.c_str(),
+      message.info.width,
+      message.info.height,
+      message.info.resolution,
+      valid_map ? "true" : "false");
+
     if (!valid_map) {
       RCLCPP_WARN(
         get_logger(),
@@ -167,7 +171,7 @@ private:
         robot_id.c_str());
     }
   }
-
+  
   bool update_tf_readiness(
     const std::string & robot_id)
   {
@@ -240,6 +244,9 @@ private:
   bool should_retry_startup(
     const RobotReadiness & readiness) const
   {
+    if (readiness.startup_in_progress) {
+      return false;
+    }
     if (!readiness.startup_requested) {
       return true;
     }
@@ -254,6 +261,72 @@ private:
 
     return
       elapsed_seconds >= startup_retry_period_seconds_;
+  }
+
+  void check_controller_active(
+    const std::string & robot_id)
+  {
+    auto client_iterator =
+      controller_state_clients_.find(robot_id);
+
+    if (client_iterator == controller_state_clients_.end()) {
+      return;
+    }
+
+    if (!client_iterator->second->service_is_ready()) {
+      return;
+    }
+
+    auto & readiness =
+      robot_readiness_[robot_id];
+
+    if (
+      readiness.startup_succeeded ||
+      readiness.startup_in_progress)
+    {
+      return;
+    }
+
+    auto request =
+      std::make_shared<GetState::Request>();
+
+    readiness.startup_in_progress = true;
+
+    client_iterator->second->async_send_request(
+      request,
+      [this, robot_id](
+        rclcpp::Client<GetState>::SharedFuture future)
+      {
+        auto & robot =
+          robot_readiness_[robot_id];
+
+        robot.startup_in_progress = false;
+
+        try {
+          const auto response = future.get();
+
+          if (
+            response->current_state.id ==
+            lifecycle_msgs::msg::State::PRIMARY_STATE_ACTIVE)
+          {
+            robot.startup_requested = true;
+            robot.startup_succeeded = true;
+
+            RCLCPP_INFO(
+              get_logger(),
+              "Nav2 already active for robot '%s'",
+              robot_id.c_str());
+          } else {
+            request_nav2_startup(robot_id);
+          }
+        } catch (const std::exception & exception) {
+          RCLCPP_WARN(
+            get_logger(),
+            "Failed to query Nav2 state for robot '%s': %s",
+            robot_id.c_str(),
+            exception.what());
+        }
+      });
   }
 
   void request_nav2_startup(
@@ -283,6 +356,8 @@ private:
     readiness.startup_requested = true;
     readiness.last_startup_attempt = now();
 
+    readiness.startup_in_progress = true;
+
     RCLCPP_INFO(
       get_logger(),
       "Requesting Nav2 startup for robot '%s'",
@@ -296,10 +371,12 @@ private:
       {
         try {
           const auto response = future.get();
-
+        
+          
           auto & robot =
-            robot_readiness_[robot_id];
-
+          robot_readiness_[robot_id];
+          
+          robot.startup_in_progress = false;
           robot.startup_succeeded =
             response->success;
 
@@ -317,6 +394,9 @@ private:
         } catch (const std::exception & exception) {
           robot_readiness_[robot_id]
             .startup_succeeded = false;
+
+          robot_readiness_[robot_id]
+            .startup_in_progress = false;
 
           RCLCPP_ERROR(
             get_logger(),
@@ -346,12 +426,23 @@ private:
 
   void check_readiness()
   {
-    if (!clock_received_) {
+    const rclcpp::Time current_ros_time = now();
+
+    if (current_ros_time.nanoseconds() <= 0) {
       log_waiting_once(
         "clock",
         "Waiting for simulation clock");
       publish_ready(false);
       return;
+    }
+
+    if (!clock_received_) {
+      clock_received_ = true;
+
+      RCLCPP_INFO(
+        get_logger(),
+        "Simulation clock is active: %.3f seconds",
+        current_ros_time.seconds());
     }
 
     bool all_inputs_ready = true;
@@ -366,7 +457,7 @@ private:
         const auto & state =
           robot_readiness_[robot_id];
 
-        RCLCPP_DEBUG(
+        RCLCPP_INFO(
           get_logger(),
           "Robot '%s' readiness: map=%s tf=%s lifecycle=%s",
           robot_id.c_str(),
@@ -384,7 +475,7 @@ private:
     }
 
     for (const auto & robot_id : robot_ids_) {
-      request_nav2_startup(robot_id);
+      check_controller_active(robot_id);
     }
 
     const bool ready = all_robots_started();
@@ -445,7 +536,6 @@ private:
   double tf_timeout_seconds_;
 
   bool clock_received_{false};
-  builtin_interfaces::msg::Time last_clock_;
 
   bool has_published_ready_{false};
   bool last_published_ready_{false};
@@ -467,9 +557,10 @@ private:
       nav_msgs::msg::OccupancyGrid>::SharedPtr>
     map_subscriptions_;
 
-  rclcpp::Subscription<
-    rosgraph_msgs::msg::Clock>::SharedPtr
-    clock_subscription_;
+  std::unordered_map<
+    std::string,
+    rclcpp::Client<GetState>::SharedPtr>
+    controller_state_clients_;
 
   rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr
     ready_publisher_;

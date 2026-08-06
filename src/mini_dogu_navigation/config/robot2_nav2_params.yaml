@@ -260,8 +260,8 @@ bt_navigator:
 
     transform_tolerance: 0.30
     bt_loop_duration: 10
-    default_server_timeout: 20
-    wait_for_service_timeout: 1000
+    default_server_timeout: 2000
+    wait_for_service_timeout: 5000
 
     navigators:
       - navigate_to_pose
