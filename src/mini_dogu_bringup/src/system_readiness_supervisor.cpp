@@ -156,7 +156,6 @@ private:
     kPolling,
     kStartupPending,
     kResetPending,
-    kReady,
   };
 
   struct RobotSupervisor
@@ -166,6 +165,15 @@ private:
     bool map_received{false};
     bool tf_available{false};
     bool lifecycle_service_available{false};
+
+    /*
+     * The readiness signal used by check_readiness(). Only finish_poll()
+     * writes this, so a robot that reached full activation keeps being
+     * re-polled on every subsequent kIdle tick (regression detection)
+     * without the transient kPolling phase ever flipping /system/ready
+     * back to false in between polls.
+     */
+    bool confirmed_active{false};
 
     rclcpp::Time last_startup_attempt{
       0,
@@ -446,19 +454,21 @@ private:
     }
 
     if (query_failed) {
+      robot->confirmed_active = false;
       robot->phase =
         RobotPhase::kIdle;
       return;
     }
 
     if (all_active) {
-      const bool was_ready =
-        robot->phase == RobotPhase::kReady;
+      const bool was_confirmed =
+        robot->confirmed_active;
 
+      robot->confirmed_active = true;
       robot->phase =
-        RobotPhase::kReady;
+        RobotPhase::kIdle;
 
-      if (!was_ready) {
+      if (!was_confirmed) {
         RCLCPP_INFO(
           get_logger(),
           "All Nav2 nodes are active for robot '%s'",
@@ -467,6 +477,8 @@ private:
 
       return;
     }
+
+    robot->confirmed_active = false;
 
     if (all_unconfigured) {
       request_nav2_startup(robot_id);
@@ -743,7 +755,7 @@ private:
         poll_lifecycle_states(robot_id);
       }
 
-      if (robot->phase != RobotPhase::kReady) {
+      if (!robot->confirmed_active) {
         all_ready = false;
       }
     }
