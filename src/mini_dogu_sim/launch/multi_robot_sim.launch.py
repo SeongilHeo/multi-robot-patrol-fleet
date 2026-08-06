@@ -15,25 +15,38 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
 
 
-WORLD_NAME = "patrol_world"
+WORLD_NAME = "industrial_facility"
 
 ROBOTS = [
     {
         "name": "robot1",
-        "x": -2.0,
+        "x": -10.0,
         "y": 0.0,
         "z": 0.0,
         "yaw": 0.0,
     },
     {
         "name": "robot2",
-        "x": 2.0,
+        "x": 10.0,
         "y": 0.0,
         "z": 0.0,
         "yaw": 3.14159265,
     },
+    {
+        "name": "robot3",
+        "x": 0.0,
+        "y": 6.0,
+        "z": 0.0,
+        "yaw": -1.57079633,
+    },
+    {
+        "name": "robot4",
+        "x": 0.0,
+        "y": -6.0,
+        "z": 0.0,
+        "yaw": 1.57079633,
+    },
 ]
-
 
 def generate_robot_sdf(template_path: str, robot_name: str) -> str:
     template = Path(template_path).read_text(encoding="utf-8")
@@ -129,7 +142,7 @@ def create_robot_actions(context):
 
         actions.append(
             TimerAction(
-                period=2.0 + index,
+                period=3.0 + (2.0 * index),
                 actions=[
                     spawn_robot,
                     lidar_frame_alias,
@@ -152,7 +165,7 @@ def generate_launch_description():
     world_file = os.path.join(
         mini_dogu_sim_share,
         "worlds",
-        "patrol_world.sdf",
+        "industrial_facility.sdf",
     )
 
     model_path = os.path.join(
