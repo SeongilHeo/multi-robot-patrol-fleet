@@ -15,7 +15,12 @@ def generate_launch_description():
         parameters=[
             {
                 "use_sim_time": use_sim_time,
-                "robot_ids": ["robot1", "robot2"],
+                "robot_ids": [
+                    "robot1",
+                    "robot2",
+                    "robot3",
+                    "robot4",
+                ],
                 "readiness_check_period_seconds": 1.0,
                 "startup_retry_period_seconds": 5.0,
                 "tf_timeout_seconds": 0.2,

@@ -11,6 +11,14 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 
 
+ROBOT_IDS = [
+    "robot1",
+    "robot2",
+    "robot3",
+    "robot4",
+]
+
+
 def generate_launch_description():
     use_sim_time = LaunchConfiguration("use_sim_time")
     autostart = LaunchConfiguration("autostart")
@@ -25,42 +33,28 @@ def generate_launch_description():
         "robot_navigation.launch.py",
     )
 
-    robot1_params = os.path.join(
-        navigation_share,
-        "config",
-        "robot1_nav2_params.yaml",
-    )
+    navigation_actions = []
 
-    robot2_params = os.path.join(
-        navigation_share,
-        "config",
-        "robot2_nav2_params.yaml",
-    )
+    for robot_id in ROBOT_IDS:
+        params_file = os.path.join(
+            navigation_share,
+            "config",
+            f"{robot_id}_nav2_params.yaml",
+        )
 
-    robot1_navigation = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            robot_navigation_launch
-        ),
-        launch_arguments={
-            "namespace": "robot1",
-            "use_sim_time": use_sim_time,
-            "autostart": autostart,
-            "params_file": robot1_params,
-        }.items(),
-    )
-
-    # Start slightly later to separate the initialization load and logs.
-    robot2_navigation = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            robot_navigation_launch
-        ),
-        launch_arguments={
-            "namespace": "robot2",
-            "use_sim_time": use_sim_time,
-            "autostart": autostart,
-            "params_file": robot2_params,
-        }.items(),
-    )
+        navigation_actions.append(
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(
+                    robot_navigation_launch
+                ),
+                launch_arguments={
+                    "namespace": robot_id,
+                    "use_sim_time": use_sim_time,
+                    "autostart": autostart,
+                    "params_file": params_file,
+                }.items(),
+            )
+        )
 
     return LaunchDescription([
         DeclareLaunchArgument(
@@ -73,6 +67,5 @@ def generate_launch_description():
             default_value="false",
         ),
 
-        robot1_navigation,
-        robot2_navigation,
+        *navigation_actions,
     ])
