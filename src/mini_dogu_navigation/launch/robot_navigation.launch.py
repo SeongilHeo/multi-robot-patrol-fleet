@@ -130,7 +130,7 @@ def generate_launch_description():
                 {
                     "use_sim_time": use_sim_time,
                     "autostart": autostart,
-                    "bond_timeout": 4.0,
+                    "bond_timeout": 10.0,
                     "attempt_respawn_reconnection": True,
                     "node_names": managed_nodes,
                 }
