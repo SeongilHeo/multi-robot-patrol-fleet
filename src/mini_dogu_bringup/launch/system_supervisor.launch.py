@@ -23,6 +23,7 @@ def generate_launch_description():
                 ],
                 "readiness_check_period_seconds": 1.0,
                 "startup_retry_period_seconds": 5.0,
+                "reset_retry_period_seconds": 5.0,
                 "tf_timeout_seconds": 0.2,
             }
         ],
