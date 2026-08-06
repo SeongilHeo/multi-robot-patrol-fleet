@@ -102,7 +102,7 @@ def generate_launch_description():
             merge_map_launch
         ),
         launch_arguments={
-            "robot_count": "2",
+            "robot_count": "4",
             "frame_id": "merged_map",
             "use_sim_time": use_sim_time,
         }.items(),

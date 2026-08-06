@@ -3,15 +3,28 @@ import os
 from ament_index_python.packages import get_package_share_directory
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.actions import (
+    DeclareLaunchArgument,
+    IncludeLaunchDescription,
+)
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 
 
-def generate_launch_description():
-    mapping_share = get_package_share_directory("mini_dogu_mapping")
+ROBOT_IDS = [
+    "robot1",
+    "robot2",
+    "robot3",
+    "robot4",
+]
 
+
+def generate_launch_description():
     use_sim_time = LaunchConfiguration("use_sim_time")
+
+    mapping_share = get_package_share_directory(
+        "mini_dogu_mapping"
+    )
 
     robot_slam_launch = os.path.join(
         mapping_share,
@@ -19,35 +32,29 @@ def generate_launch_description():
         "robot_slam.launch.py",
     )
 
-    robot1_slam = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(robot_slam_launch),
-        launch_arguments={
-            "namespace": "robot1",
-            "use_sim_time": use_sim_time,
-            "map_frame": "robot1/map",
-            "odom_frame": "robot1/odom",
-            "base_frame": "robot1/base_link",
-            "scan_topic": "scan",
-        }.items(),
-    )
+    slam_actions = []
 
-    robot2_slam = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(robot_slam_launch),
-        launch_arguments={
-            "namespace": "robot2",
-            "use_sim_time": use_sim_time,
-            "map_frame": "robot2/map",
-            "odom_frame": "robot2/odom",
-            "base_frame": "robot2/base_link",
-            "scan_topic": "scan",
-        }.items(),
-    )
+    for robot_id in ROBOT_IDS:
+        slam_actions.append(
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(
+                    robot_slam_launch
+                ),
+                launch_arguments={
+                    "namespace": robot_id,
+                    "use_sim_time": use_sim_time,
+                    "map_frame": f"{robot_id}/map",
+                    "odom_frame": f"{robot_id}/odom",
+                    "base_frame": f"{robot_id}/base_link",
+                    "scan_topic": "scan",
+                }.items(),
+            )
+        )
 
     return LaunchDescription([
         DeclareLaunchArgument(
             "use_sim_time",
             default_value="true",
         ),
-        robot1_slam,
-        robot2_slam,
+        *slam_actions,
     ])
