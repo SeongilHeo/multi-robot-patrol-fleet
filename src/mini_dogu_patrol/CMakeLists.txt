@@ -7,6 +7,7 @@ endif()
 
 find_package(ament_cmake REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(mini_dogu_interfaces REQUIRED)
 find_package(nav2_msgs REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_action REQUIRED)
@@ -34,6 +35,7 @@ target_compile_features(
 ament_target_dependencies(
   patrol_manager
   geometry_msgs
+  mini_dogu_interfaces
   nav2_msgs
   rclcpp
   rclcpp_action

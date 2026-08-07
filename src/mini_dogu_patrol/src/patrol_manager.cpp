@@ -47,6 +47,14 @@ PatrolManager::PatrolManager(const rclcpp::NodeOptions & options)
       0.0, 0.0, -1.57079632679
     });
 
+  home_pose_values_ = this->declare_parameter<std::vector<double>>(
+    "home_pose",
+    std::vector<double>{0.0, 0.0, 0.0});
+
+  charge_dock_pose_values_ = this->declare_parameter<std::vector<double>>(
+    "charge_dock_pose",
+    std::vector<double>{0.0, 0.0, 0.0});
+
   action_name_ =
     "/" + robot_namespace_ + "/follow_waypoints";
 
@@ -68,7 +76,7 @@ PatrolManager::PatrolManager(const rclcpp::NodeOptions & options)
       status_qos);
 
   start_service_ =
-    this->create_service<std_srvs::srv::Trigger>(
+    this->create_service<StartMission>(
     patrol_prefix + "/start",
     std::bind(
       &PatrolManager::handle_start,
@@ -111,6 +119,39 @@ PatrolManager::PatrolManager(const rclcpp::NodeOptions & options)
   }
 }
 
+geometry_msgs::msg::PoseStamped
+PatrolManager::pose_from_xyz_yaw(double x, double y, double yaw) const
+{
+  geometry_msgs::msg::PoseStamped pose;
+  pose.header.stamp = this->now();
+  pose.header.frame_id = frame_id_;
+
+  pose.pose.position.x = x;
+  pose.pose.position.y = y;
+  pose.pose.position.z = 0.0;
+
+  pose.pose.orientation.x = 0.0;
+  pose.pose.orientation.y = 0.0;
+  pose.pose.orientation.z = std::sin(yaw * 0.5);
+  pose.pose.orientation.w = std::cos(yaw * 0.5);
+
+  return pose;
+}
+
+geometry_msgs::msg::PoseStamped
+PatrolManager::finalize_target_pose(
+  const geometry_msgs::msg::PoseStamped & requested) const
+{
+  geometry_msgs::msg::PoseStamped pose = requested;
+  pose.header.stamp = this->now();
+
+  if (pose.header.frame_id.empty()) {
+    pose.header.frame_id = frame_id_;
+  }
+
+  return pose;
+}
+
 std::vector<geometry_msgs::msg::PoseStamped>
 PatrolManager::build_waypoints() const
 {
@@ -127,48 +168,38 @@ PatrolManager::build_waypoints() const
   std::vector<geometry_msgs::msg::PoseStamped> poses;
   poses.reserve(waypoint_values_.size() / 3);
 
-  const auto stamp = this->now();
-
   for (std::size_t i = 0; i < waypoint_values_.size(); i += 3) {
-    const double x = waypoint_values_.at(i);
-    const double y = waypoint_values_.at(i + 1);
-    const double yaw = waypoint_values_.at(i + 2);
-
-    geometry_msgs::msg::PoseStamped pose;
-    pose.header.stamp = stamp;
-    pose.header.frame_id = frame_id_;
-
-    pose.pose.position.x = x;
-    pose.pose.position.y = y;
-    pose.pose.position.z = 0.0;
-
-    pose.pose.orientation.x = 0.0;
-    pose.pose.orientation.y = 0.0;
-    pose.pose.orientation.z = std::sin(yaw * 0.5);
-    pose.pose.orientation.w = std::cos(yaw * 0.5);
-
-    poses.push_back(pose);
+    poses.push_back(
+      pose_from_xyz_yaw(
+        waypoint_values_.at(i),
+        waypoint_values_.at(i + 1),
+        waypoint_values_.at(i + 2)));
   }
 
   return poses;
 }
 
 void PatrolManager::handle_start(
-  const std::shared_ptr<std_srvs::srv::Trigger::Request>,
-  std::shared_ptr<std_srvs::srv::Trigger::Response> response)
+  const std::shared_ptr<StartMission::Request> request,
+  std::shared_ptr<StartMission::Response> response)
 {
-  if (patrol_active_) {
+  std::string error;
+
+  if (
+    execute_mission(
+      request->mission_type,
+      request->target_pose,
+      request->has_target,
+      error))
+  {
+    response->success = true;
+    response->message =
+      "Mission accepted; "
+      "execution status will be published on the patrol status topic";
+  } else {
     response->success = false;
-    response->message = "Patrol mission is already active";
-    return;
+    response->message = error;
   }
-
-  response->success = true;
-  response->message =
-    "Patrol start request accepted; "
-    "execution status will be published on the patrol status topic";
-
-  start_patrol();
 }
 
 void PatrolManager::handle_stop(
@@ -206,13 +237,125 @@ void PatrolManager::publish_status(const std::string & status)
 
 void PatrolManager::start_patrol()
 {
-  if (patrol_active_) {
-    RCLCPP_WARN(
+  std::string error;
+
+  if (
+    !execute_mission(
+      StartMission::Request::MISSION_PATROL,
+      geometry_msgs::msg::PoseStamped{},
+      false,
+      error))
+  {
+    RCLCPP_ERROR(
       this->get_logger(),
-      "Patrol mission is already active");
-    return;
+      "Autostart patrol failed: %s",
+      error.c_str());
+  }
+}
+
+bool PatrolManager::execute_mission(
+  uint8_t mission_type,
+  const geometry_msgs::msg::PoseStamped & target_pose,
+  bool has_target,
+  std::string & error)
+{
+  if (patrol_active_) {
+    error = "Patrol mission is already active";
+    return false;
   }
 
+  std::vector<geometry_msgs::msg::PoseStamped> poses;
+  uint32_t loops = 0;
+  uint32_t start_index = 0;
+
+  switch (mission_type) {
+    case StartMission::Request::MISSION_PATROL:
+      {
+        try {
+          poses = build_waypoints();
+        } catch (const std::exception & exception) {
+          error = exception.what();
+          return false;
+        }
+
+        if (number_of_loops_ < 0 || goal_index_ < 0) {
+          error = "number_of_loops and goal_index cannot be negative";
+          return false;
+        }
+
+        if (
+          static_cast<std::size_t>(goal_index_) >= poses.size())
+        {
+          error = "goal_index exceeds waypoint count";
+          return false;
+        }
+
+        loops = static_cast<uint32_t>(number_of_loops_);
+        start_index = static_cast<uint32_t>(goal_index_);
+        break;
+      }
+
+    case StartMission::Request::MISSION_GO_TO:
+    case StartMission::Request::MISSION_INSPECT:
+      {
+        if (!has_target) {
+          error = "this mission_type requires a target_pose";
+          return false;
+        }
+
+        poses.push_back(finalize_target_pose(target_pose));
+        break;
+      }
+
+    case StartMission::Request::MISSION_RETURN_HOME:
+      {
+        if (has_target) {
+          poses.push_back(finalize_target_pose(target_pose));
+        } else if (home_pose_values_.size() == 3) {
+          poses.push_back(
+            pose_from_xyz_yaw(
+              home_pose_values_.at(0),
+              home_pose_values_.at(1),
+              home_pose_values_.at(2)));
+        } else {
+          error = "no target_pose given and no valid configured home_pose";
+          return false;
+        }
+        break;
+      }
+
+    case StartMission::Request::MISSION_CHARGE:
+      {
+        if (has_target) {
+          poses.push_back(finalize_target_pose(target_pose));
+        } else if (charge_dock_pose_values_.size() == 3) {
+          poses.push_back(
+            pose_from_xyz_yaw(
+              charge_dock_pose_values_.at(0),
+              charge_dock_pose_values_.at(1),
+              charge_dock_pose_values_.at(2)));
+        } else {
+          error =
+            "no target_pose given and no valid configured charge_dock_pose";
+          return false;
+        }
+        break;
+      }
+
+    default:
+      error = "unsupported mission_type";
+      return false;
+  }
+
+  send_goal(poses, loops, start_index);
+  return true;
+}
+
+void PatrolManager::send_goal(
+  std::vector<geometry_msgs::msg::PoseStamped> poses,
+  uint32_t number_of_loops,
+  uint32_t goal_index)
+{
   publish_status("waiting_for_nav2");
 
   const auto wait_duration =
@@ -236,53 +379,16 @@ void PatrolManager::start_patrol()
   publish_status("sending_goal");
 
   FollowWaypoints::Goal goal;
-
-  try {
-    goal.poses = build_waypoints();
-  } catch (const std::exception & error) {
-    publish_status("error");
-
-    RCLCPP_ERROR(
-      this->get_logger(),
-      "Invalid waypoint configuration: %s",
-      error.what());
-    return;
-  }
-
-  if (number_of_loops_ < 0 || goal_index_ < 0) {
-    publish_status("error");
-
-    RCLCPP_ERROR(
-      this->get_logger(),
-      "number_of_loops and goal_index cannot be negative");
-    return;
-  }
-
-  if (
-    static_cast<std::size_t>(goal_index_) >= goal.poses.size())
-  {
-    publish_status("error");
-
-    RCLCPP_ERROR(
-      this->get_logger(),
-      "goal_index %ld exceeds waypoint count %zu",
-      goal_index_,
-      goal.poses.size());
-    return;
-  }
-
-  goal.number_of_loops =
-    static_cast<std::uint32_t>(number_of_loops_);
-
-  goal.goal_index =
-    static_cast<std::uint32_t>(goal_index_);
+  goal.poses = std::move(poses);
+  goal.number_of_loops = number_of_loops;
+  goal.goal_index = goal_index;
 
   RCLCPP_INFO(
     this->get_logger(),
-    "Sending patrol mission: %zu waypoints, loops=%ld, start_index=%ld",
+    "Sending mission: %zu waypoints, loops=%u, start_index=%u",
     goal.poses.size(),
-    number_of_loops_,
-    goal_index_);
+    number_of_loops,
+    goal_index);
 
   rclcpp_action::Client<FollowWaypoints>::SendGoalOptions options;
 

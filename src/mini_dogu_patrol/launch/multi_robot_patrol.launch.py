@@ -11,6 +11,14 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 
 
+ROBOT_IDS = [
+    "robot1",
+    "robot2",
+    "robot3",
+    "robot4",
+]
+
+
 def generate_launch_description():
     use_sim_time = LaunchConfiguration("use_sim_time")
     autostart = LaunchConfiguration("autostart")
@@ -25,29 +33,20 @@ def generate_launch_description():
         "patrol.launch.py",
     )
 
-    robot1_patrol = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            patrol_launch_file
-        ),
-        launch_arguments={
-            "robot_namespace": "robot1",
-            "frame_id": "robot1/map",
-            "use_sim_time": use_sim_time,
-            "autostart": autostart,
-        }.items(),
-    )
-
-    robot2_patrol = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            patrol_launch_file
-        ),
-        launch_arguments={
-            "robot_namespace": "robot2",
-            "frame_id": "robot2/map",
-            "use_sim_time": use_sim_time,
-            "autostart": autostart,
-        }.items(),
-    )
+    patrol_actions = [
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(
+                patrol_launch_file
+            ),
+            launch_arguments={
+                "robot_namespace": robot_id,
+                "frame_id": f"{robot_id}/map",
+                "use_sim_time": use_sim_time,
+                "autostart": autostart,
+            }.items(),
+        )
+        for robot_id in ROBOT_IDS
+    ]
 
     return LaunchDescription([
         DeclareLaunchArgument(
@@ -60,6 +59,5 @@ def generate_launch_description():
             default_value="false",
         ),
 
-        robot1_patrol,
-        robot2_patrol,
+        *patrol_actions,
     ])
