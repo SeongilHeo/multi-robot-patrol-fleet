@@ -11,16 +11,32 @@ find_package(rclcpp_action REQUIRED)
 find_package(mini_dogu_interfaces REQUIRED)
 find_package(std_srvs REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
 find_package(nav2_msgs REQUIRED)
+find_package(SQLite3 REQUIRED)
 
 add_executable(
   fleet_manager_node
   src/fleet_manager_node.cpp
+  src/mission_store.cpp
 )
 
 add_executable(
   robot_heartbeat_node
   src/robot_heartbeat_node.cpp
+)
+
+target_include_directories(
+  fleet_manager_node
+  PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+)
+
+target_compile_features(
+  fleet_manager_node
+  PUBLIC
+    cxx_std_17
 )
 
 ament_target_dependencies(
@@ -38,6 +54,12 @@ ament_target_dependencies(
   mini_dogu_interfaces
   std_srvs
   std_msgs
+  geometry_msgs
+)
+
+target_link_libraries(
+  fleet_manager_node
+  SQLite::SQLite3
 )
 
 install(
@@ -45,6 +67,12 @@ install(
     fleet_manager_node
     robot_heartbeat_node
   DESTINATION lib/${PROJECT_NAME}
+)
+
+install(
+  DIRECTORY
+    include/
+  DESTINATION include
 )
 
 install(

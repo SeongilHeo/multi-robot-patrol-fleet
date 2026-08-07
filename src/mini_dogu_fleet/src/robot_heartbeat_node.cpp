@@ -5,6 +5,7 @@
 #include <string>
 
 #include "rclcpp/rclcpp.hpp"
+#include "std_msgs/msg/bool.hpp"
 #include "std_msgs/msg/string.hpp"
 
 #include "mini_dogu_interfaces/msg/robot_heartbeat.hpp"
@@ -56,6 +57,19 @@ public:
           &RobotHeartbeatNode::patrol_status_callback,
           this,
           std::placeholders::_1));
+
+    rclcpp::QoS localization_ok_qos(1);
+    localization_ok_qos.reliable();
+    localization_ok_qos.transient_local();
+
+    localization_ok_subscription_ =
+      create_subscription<std_msgs::msg::Bool>(
+        "localization_ok",
+        localization_ok_qos,
+        [this](const std_msgs::msg::Bool::SharedPtr message)
+        {
+          localization_ok_ = message->data;
+        });
 
     timer_ = create_wall_timer(
       1s,
@@ -153,6 +167,9 @@ private:
     message.current_mission =
       current_mission_;
 
+    message.localization_ok =
+      localization_ok_;
+
     publisher_->publish(message);
   }
 
@@ -167,11 +184,16 @@ private:
 
   std::string current_mission_;
 
+  bool localization_ok_{true};
+
   rclcpp::Publisher<RobotHeartbeat>::SharedPtr
     publisher_;
 
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr
     patrol_status_subscription_;
+
+  rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr
+    localization_ok_subscription_;
 
   rclcpp::TimerBase::SharedPtr timer_;
 };

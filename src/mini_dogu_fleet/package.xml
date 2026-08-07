@@ -21,7 +21,9 @@
   <depend>mini_dogu_interfaces</depend>
   <depend>std_msgs</depend>
   <depend>std_srvs</depend>
+  <depend>geometry_msgs</depend>
   <depend>nav2_msgs</depend>
+  <depend>sqlite3</depend>
 
   <exec_depend>ament_index_python</exec_depend>
   <exec_depend>launch</exec_depend>
