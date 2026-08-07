@@ -9,6 +9,12 @@ def generate_launch_description():
     minimum_battery_percentage = LaunchConfiguration(
         "minimum_battery_percentage"
     )
+    recurring_patrol_period_seconds = LaunchConfiguration(
+        "recurring_patrol_period_seconds"
+    )
+    recurring_patrol_priority = LaunchConfiguration(
+        "recurring_patrol_priority"
+    )
 
     scheduler = Node(
         package="mini_dogu_scheduler",
@@ -22,6 +28,10 @@ def generate_launch_description():
                 "assign_mission_service": "/fleet/assign_mission",
                 "minimum_battery_percentage":
                     minimum_battery_percentage,
+                "recurring_patrol_period_seconds":
+                    recurring_patrol_period_seconds,
+                "recurring_patrol_priority":
+                    recurring_patrol_priority,
             }
         ],
     )
@@ -34,6 +44,18 @@ def generate_launch_description():
         DeclareLaunchArgument(
             "minimum_battery_percentage",
             default_value="20.0",
+        ),
+        DeclareLaunchArgument(
+            "recurring_patrol_period_seconds",
+            default_value="0.0",
+            description=(
+                "Enqueue a patrol mission on this fixed period when "
+                "greater than zero. 0 disables recurring patrol."
+            ),
+        ),
+        DeclareLaunchArgument(
+            "recurring_patrol_priority",
+            default_value="50",
         ),
         scheduler,
     ])

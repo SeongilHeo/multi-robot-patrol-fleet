@@ -7,6 +7,7 @@ endif()
 
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(geometry_msgs REQUIRED)
 find_package(mini_dogu_interfaces REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
@@ -25,6 +26,7 @@ target_compile_features(
 ament_target_dependencies(
   mission_scheduler_node
   rclcpp
+  geometry_msgs
   mini_dogu_interfaces
   std_msgs
   std_srvs

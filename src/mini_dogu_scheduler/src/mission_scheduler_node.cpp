@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cstdint>
 #include <functional>
@@ -15,6 +16,8 @@
 #include "std_msgs/msg/bool.hpp"
 #include "std_srvs/srv/trigger.hpp"
 
+#include "geometry_msgs/msg/pose_stamped.hpp"
+
 #include "mini_dogu_interfaces/msg/fleet_state.hpp"
 #include "mini_dogu_interfaces/msg/mission_queue_state.hpp"
 #include "mini_dogu_interfaces/msg/robot_heartbeat.hpp"
@@ -23,6 +26,25 @@
 #include "mini_dogu_interfaces/srv/cancel_mission.hpp"
 
 using namespace std::chrono_literals;
+
+namespace
+{
+const std::array<const char *, 5> kSupportedMissionTypes{
+  "patrol",
+  "go_to",
+  "return_home",
+  "charge",
+  "inspect"
+};
+
+bool is_supported_mission_type(const std::string & mission_type)
+{
+  return std::find(
+    kSupportedMissionTypes.begin(),
+    kSupportedMissionTypes.end(),
+    mission_type) != kSupportedMissionTypes.end();
+}
+}  // namespace
 
 class MissionSchedulerNode : public rclcpp::Node
 {
@@ -70,6 +92,16 @@ using CancelMission =
       declare_parameter<double>(
       "reservation_timeout_seconds",
       10.0);
+
+    recurring_patrol_period_seconds_ =
+      declare_parameter<double>(
+      "recurring_patrol_period_seconds",
+      0.0);
+
+    recurring_patrol_priority_ =
+      declare_parameter<int>(
+      "recurring_patrol_priority",
+      50);
 
     fleet_state_subscription_ =
       create_subscription<FleetState>(
@@ -140,6 +172,26 @@ using CancelMission =
         &MissionSchedulerNode::process_queue,
         this));
 
+    if (recurring_patrol_period_seconds_ > 0.0) {
+      const auto recurring_period =
+        std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::duration<double>(
+          recurring_patrol_period_seconds_));
+
+      recurring_patrol_timer_ =
+        create_wall_timer(
+        recurring_period,
+        std::bind(
+          &MissionSchedulerNode::enqueue_recurring_patrol,
+          this));
+
+      RCLCPP_INFO(
+        get_logger(),
+        "Recurring patrol enabled: every %.1f seconds at priority %d",
+        recurring_patrol_period_seconds_,
+        recurring_patrol_priority_);
+    }
+
     publish_queue_state();
 
     RCLCPP_INFO(
@@ -159,12 +211,23 @@ private:
     std::string mission_type;
     int32_t priority{0};
     uint64_t sequence{0};
+    geometry_msgs::msg::PoseStamped target_pose;
+    bool has_target{false};
   };
 
   struct CandidateRobot
   {
     std::string robot_id;
     float battery_percentage{0.0F};
+  };
+
+  struct ActiveMission
+  {
+    std::string mission_id;
+    std::string mission_type;
+    int32_t priority{0};
+    geometry_msgs::msg::PoseStamped target_pose;
+    bool has_target{false};
   };
 
   void system_ready_callback(
@@ -187,6 +250,7 @@ private:
     received_fleet_state_ = true;
 
     update_robot_reservations_locked();
+    reconcile_active_missions_locked();
   }
 
   void update_robot_reservations_locked()
@@ -228,6 +292,100 @@ private:
     }
   }
 
+  /*
+   * Called with state_mutex_ already held by fleet_state_callback. A
+   * robot that goes confirmed-offline or reports STATE_ERROR while it
+   * has an active mission is treated as a failed mission and the same
+   * mission (new id, same type/priority/target) goes back on the queue
+   * for another robot to pick up. A robot that returns to IDLE with an
+   * active mission on record is treated as having completed it.
+   */
+  void reconcile_active_missions_locked()
+  {
+    std::vector<std::string> completed_robot_ids;
+    std::vector<std::pair<std::string, ActiveMission>> failed;
+
+    {
+      std::lock_guard<std::mutex> lock(active_missions_mutex_);
+
+      if (active_missions_.empty()) {
+        return;
+      }
+
+      for (const auto & entry : active_missions_) {
+        const auto & robot_id = entry.first;
+        const auto & active = entry.second;
+
+        const auto robot_iterator =
+          std::find_if(
+            latest_fleet_state_.robots.begin(),
+            latest_fleet_state_.robots.end(),
+            [&robot_id](const auto & robot)
+            {
+              return robot.robot_id == robot_id;
+            });
+
+        if (robot_iterator == latest_fleet_state_.robots.end()) {
+          continue;
+        }
+
+        const bool robot_failed =
+          robot_iterator->confirmed_offline ||
+          robot_iterator->state == RobotHeartbeat::STATE_ERROR;
+
+        const bool robot_completed =
+          !robot_failed &&
+          robot_iterator->state == RobotHeartbeat::STATE_IDLE;
+
+        if (robot_failed) {
+          failed.emplace_back(robot_id, active);
+        } else if (robot_completed) {
+          completed_robot_ids.push_back(robot_id);
+        }
+      }
+
+      for (const auto & robot_id : completed_robot_ids) {
+        active_missions_.erase(robot_id);
+      }
+
+      for (const auto & entry : failed) {
+        active_missions_.erase(entry.first);
+      }
+    }
+
+    for (const auto & robot_id : completed_robot_ids) {
+      RCLCPP_INFO(
+        get_logger(),
+        "Robot '%s' completed its active mission",
+        robot_id.c_str());
+    }
+
+    for (const auto & entry : failed) {
+      const auto & robot_id = entry.first;
+      const auto & mission = entry.second;
+
+      RCLCPP_WARN(
+        get_logger(),
+        "Mission '%s' on robot '%s' failed (offline or error); "
+        "re-queuing for reassignment",
+        mission.mission_id.c_str(),
+        robot_id.c_str());
+
+      std::string new_mission_id;
+
+      enqueue_mission(
+        mission.mission_type,
+        mission.priority,
+        mission.target_pose,
+        mission.has_target,
+        new_mission_id);
+    }
+
+    if (!failed.empty()) {
+      publish_queue_state();
+    }
+  }
+
   std::string create_mission_id()
   {
     ++mission_counter_;
@@ -240,6 +398,8 @@ private:
   void enqueue_mission(
     const std::string & mission_type,
     int32_t priority,
+    const geometry_msgs::msg::PoseStamped & target_pose,
+    bool has_target,
     std::string & mission_id)
   {
     std::lock_guard<std::mutex> lock(queue_mutex_);
@@ -251,7 +411,9 @@ private:
         mission_id,
         mission_type,
         priority,
-        next_sequence_++
+        next_sequence_++,
+        target_pose,
+        has_target
       });
 
     sort_queue_locked();
@@ -274,11 +436,30 @@ private:
       });
   }
 
+  void enqueue_recurring_patrol()
+  {
+    std::string mission_id;
+
+    enqueue_mission(
+      "patrol",
+      recurring_patrol_priority_,
+      geometry_msgs::msg::PoseStamped{},
+      false,
+      mission_id);
+
+    publish_queue_state();
+
+    RCLCPP_INFO(
+      get_logger(),
+      "Recurring patrol enqueued mission '%s'",
+      mission_id.c_str());
+  }
+
   void handle_queue_mission(
     const std::shared_ptr<QueueMission::Request> request,
     std::shared_ptr<QueueMission::Response> response)
   {
-    if (request->mission_type != "patrol") {
+    if (!is_supported_mission_type(request->mission_type)) {
       response->accepted = false;
       response->message =
         "Unsupported mission type: " +
@@ -291,6 +472,8 @@ private:
     enqueue_mission(
       request->mission_type,
       request->priority,
+      request->target_pose,
+      request->has_target,
       mission_id);
 
     publish_queue_state();
@@ -377,6 +560,8 @@ private:
     enqueue_mission(
       "patrol",
       0,
+      geometry_msgs::msg::PoseStamped{},
+      false,
       mission_id);
 
     publish_queue_state();
@@ -415,6 +600,8 @@ private:
 
       if (
         robot.online &&
+        !robot.confirmed_offline &&
+        robot.localization_ok &&
         idle &&
         battery_sufficient &&
         !reserved)
@@ -495,6 +682,15 @@ private:
     reservation_times_.erase(robot_id);
   }
 
+  void set_active_mission(
+    const std::string & robot_id,
+    const ActiveMission & mission)
+  {
+    std::lock_guard<std::mutex> lock(active_missions_mutex_);
+
+    active_missions_[robot_id] = mission;
+  }
+
   void process_queue()
   {
     if (!system_ready_) {
@@ -532,6 +728,9 @@ private:
     request->mission_type = mission->mission_type;
     request->command =
       AssignMission::Request::COMMAND_START;
+    request->mission_id = mission->mission_id;
+    request->target_pose = mission->target_pose;
+    request->has_target = mission->has_target;
 
     {
       std::lock_guard<std::mutex> lock(request_mutex_);
@@ -554,6 +753,10 @@ private:
       [
         this,
         mission_id = mission->mission_id,
+        mission_type = mission->mission_type,
+        priority = mission->priority,
+        target_pose = mission->target_pose,
+        has_target = mission->has_target,
         robot_id = robot->robot_id
       ](
         rclcpp::Client<
@@ -574,6 +777,16 @@ private:
               response->message.c_str());
 
             remove_mission(mission_id);
+
+            set_active_mission(
+              robot_id,
+              ActiveMission{
+                mission_id,
+                mission_type,
+                priority,
+                target_pose,
+                has_target
+              });
           } else {
             RCLCPP_WARN(
               get_logger(),
@@ -645,6 +858,8 @@ private:
 
   double minimum_battery_percentage_;
   double reservation_timeout_seconds_;
+  double recurring_patrol_period_seconds_;
+  int recurring_patrol_priority_;
 
   bool system_ready_{false};
 
@@ -656,6 +871,9 @@ private:
   std::vector<QueuedMission> mission_queue_;
   uint64_t next_sequence_{0};
   uint64_t mission_counter_{0};
+
+  std::mutex active_missions_mutex_;
+  std::unordered_map<std::string, ActiveMission> active_missions_;
 
   std::unordered_set<std::string>
     reserved_robots_;
@@ -691,6 +909,9 @@ private:
 
   rclcpp::TimerBase::SharedPtr
     dispatch_timer_;
+
+  rclcpp::TimerBase::SharedPtr
+    recurring_patrol_timer_;
 };
 
 
