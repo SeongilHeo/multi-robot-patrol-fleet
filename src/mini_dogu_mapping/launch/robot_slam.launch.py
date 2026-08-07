@@ -7,7 +7,7 @@ from launch.actions import DeclareLaunchArgument, EmitEvent, RegisterEventHandle
 from launch.events import matches_action
 from launch.substitutions import LaunchConfiguration
 
-from launch_ros.actions import LifecycleNode
+from launch_ros.actions import LifecycleNode, Node
 from launch_ros.event_handlers import OnStateTransition
 from launch_ros.events.lifecycle import ChangeState
 from launch_ros.parameter_descriptions import ParameterFile
@@ -81,6 +81,21 @@ def generate_launch_description():
         )
     )
 
+    pose_jump_watchdog = Node(
+        package="mini_dogu_mapping",
+        executable="pose_jump_watchdog",
+        namespace=namespace,
+        name="pose_jump_watchdog",
+        output="screen",
+        parameters=[
+            {
+                "use_sim_time": use_sim_time,
+                "map_frame": map_frame,
+                "base_frame": base_frame,
+            }
+        ],
+    )
+
     return LaunchDescription([
         DeclareLaunchArgument(
             "namespace",
@@ -110,4 +125,5 @@ def generate_launch_description():
         slam_node,
         configure_event,
         activate_event,
+        pose_jump_watchdog,
     ])

@@ -7,9 +7,37 @@ endif()
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
-# uncomment the following section in order to fill in
-# further dependencies manually.
-# find_package(<dependency> REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(tf2 REQUIRED)
+find_package(tf2_ros REQUIRED)
+
+add_executable(
+  pose_jump_watchdog
+  src/pose_jump_watchdog.cpp
+)
+
+target_compile_features(
+  pose_jump_watchdog
+  PUBLIC
+    cxx_std_17
+)
+
+ament_target_dependencies(
+  pose_jump_watchdog
+  rclcpp
+  geometry_msgs
+  std_msgs
+  tf2
+  tf2_ros
+)
+
+install(
+  TARGETS
+    pose_jump_watchdog
+  DESTINATION lib/${PROJECT_NAME}
+)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
