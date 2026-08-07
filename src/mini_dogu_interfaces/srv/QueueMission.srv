@@ -1,5 +1,7 @@
 string mission_type
 int32 priority
+geometry_msgs/PoseStamped target_pose
+bool has_target
 ---
 bool accepted
 string mission_id

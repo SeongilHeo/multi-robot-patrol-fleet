@@ -11,3 +11,4 @@ builtin_interfaces/Time stamp
 uint8 state
 float32 battery_percentage
 string current_mission
+bool localization_ok

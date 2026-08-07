@@ -8,6 +8,7 @@ endif()
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(builtin_interfaces REQUIRED)
+find_package(geometry_msgs REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
@@ -15,12 +16,15 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/FleetRobotState.msg"
   "msg/FleetState.msg"
   "msg/MissionQueueState.msg"
+  "msg/RobotIncident.msg"
 
   "srv/AssignMission.srv"
   "srv/QueueMission.srv"
   "srv/CancelMission.srv"
+  "srv/StartMission.srv"
+  "srv/ReportIncident.srv"
 
-  DEPENDENCIES builtin_interfaces
+  DEPENDENCIES builtin_interfaces geometry_msgs
 )
 
 ament_export_dependencies(rosidl_default_runtime)

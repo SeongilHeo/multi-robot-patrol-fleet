@@ -1,0 +1,12 @@
+uint8 MISSION_PATROL=1
+uint8 MISSION_GO_TO=2
+uint8 MISSION_RETURN_HOME=3
+uint8 MISSION_CHARGE=4
+uint8 MISSION_INSPECT=5
+
+uint8 mission_type
+geometry_msgs/PoseStamped target_pose
+bool has_target
+---
+bool success
+string message

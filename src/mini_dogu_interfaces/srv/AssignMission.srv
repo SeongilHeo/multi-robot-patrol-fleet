@@ -4,6 +4,9 @@ uint8 COMMAND_STOP=2
 string robot_id
 string mission_type
 uint8 command
+string mission_id
+geometry_msgs/PoseStamped target_pose
+bool has_target
 ---
 bool success
 string message

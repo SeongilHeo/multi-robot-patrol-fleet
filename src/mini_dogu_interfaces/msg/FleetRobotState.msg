@@ -1,6 +1,8 @@
 string robot_id
 bool online
+bool confirmed_offline
 uint8 state
 float32 battery_percentage
+bool localization_ok
 string current_mission
 builtin_interfaces/Time last_heartbeat
