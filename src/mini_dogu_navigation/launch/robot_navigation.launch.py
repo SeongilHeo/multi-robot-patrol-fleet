@@ -49,6 +49,9 @@ def generate_launch_description():
             name="controller_server",
             output="screen",
             parameters=[configured_params],
+            remappings=[
+                ("cmd_vel", "cmd_vel_nav"),
+            ],
             arguments=[
                 "--ros-args",
                 "--log-level",
