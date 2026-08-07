@@ -29,6 +29,7 @@
   <exec_depend>launch_ros</exec_depend>
 
   <exec_depend>mini_dogu_sim</exec_depend>
+  <exec_depend>mini_dogu_safety</exec_depend>
   <exec_depend>mini_dogu_description</exec_depend>
   <exec_depend>mini_dogu_mapping</exec_depend>
   <exec_depend>mini_dogu_fleet</exec_depend>

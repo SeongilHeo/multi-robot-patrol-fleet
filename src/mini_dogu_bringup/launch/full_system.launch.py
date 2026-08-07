@@ -19,7 +19,11 @@ def generate_launch_description():
     sim_share = get_package_share_directory(
         "mini_dogu_sim"
     )
-    
+
+    safety_share = get_package_share_directory(
+        "mini_dogu_safety"
+    )
+
     bringup_share = get_package_share_directory(
         "mini_dogu_bringup"
     )
@@ -44,6 +48,12 @@ def generate_launch_description():
         sim_share,
         "launch",
         "multi_robot_sim.launch.py",
+    )
+
+    safety_launch = os.path.join(
+        safety_share,
+        "launch",
+        "safety_bringup.launch.py",
     )
 
     system_bringup_launch = os.path.join(
@@ -86,6 +96,15 @@ def generate_launch_description():
         PythonLaunchDescriptionSource(
             simulation_launch
         ),
+    )
+
+    safety = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            safety_launch
+        ),
+        launch_arguments={
+            "use_sim_time": use_sim_time,
+        }.items(),
     )
 
     system_bringup = IncludeLaunchDescription(
@@ -155,6 +174,7 @@ def generate_launch_description():
         ),
 
         simulation,
+        safety,
         system_bringup,
         map_merge,
         navigation,
