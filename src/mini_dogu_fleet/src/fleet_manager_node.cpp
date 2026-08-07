@@ -6,9 +6,12 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
+#include <atomic>
+#include <stdexcept>
 
 #include "rclcpp/rclcpp.hpp"
 #include "std_srvs/srv/trigger.hpp"
+#include "std_msgs/msg/bool.hpp"
 
 #include "mini_dogu_interfaces/msg/fleet_robot_state.hpp"
 #include "mini_dogu_interfaces/msg/fleet_state.hpp"
@@ -45,6 +48,17 @@ public:
             create_publisher<mini_dogu_interfaces::msg::FleetState>(
                 "/fleet/state",
                 rclcpp::QoS(10).reliable());
+
+        system_ready_subscription_ =
+            create_subscription<std_msgs::msg::Bool>(
+                "/system/ready",
+                rclcpp::QoS(1)
+                    .reliable()
+                    .transient_local(),
+                [this](const std_msgs::msg::Bool::SharedPtr message)
+                {
+                    system_ready_callback(*message);
+                });
 
         configure_robot_monitoring();
         configure_patrol_control();
@@ -146,12 +160,26 @@ private:
                     std::placeholders::_1,
                     std::placeholders::_2));
 
-        // Existing Trigger-based compatible interface
+        const auto start_it =
+            patrol_start_clients_.find(patrol_robot_);
+
+        const auto stop_it =
+            patrol_stop_clients_.find(patrol_robot_);
+
+        if (
+            start_it == patrol_start_clients_.end() ||
+            stop_it == patrol_stop_clients_.end())
+        {
+            throw std::runtime_error(
+                "Invalid patrol_robot parameter: " +
+                patrol_robot_);
+        }
+
         patrol_start_client_ =
-            patrol_start_clients_.at(patrol_robot_);
+            start_it->second;
 
         patrol_stop_client_ =
-            patrol_stop_clients_.at(patrol_robot_);
+            stop_it->second;
 
         dispatch_patrol_service_ =
             create_service<Trigger>(
@@ -220,6 +248,19 @@ private:
         const std::shared_ptr<Trigger::Request>,
         std::shared_ptr<Trigger::Response> response)
     {
+        if (!system_ready_.load())
+        {
+            response->success = false;
+            response->message =
+                "System is not ready for patrol dispatch";
+
+            RCLCPP_WARN(
+                get_logger(),
+                "%s",
+                response->message.c_str());
+
+            return;
+        }
         if (!is_robot_online(patrol_robot_))
         {
             response->success = false;
@@ -423,11 +464,18 @@ private:
         fleet_state_publisher_->publish(fleet_message);
     }
 
+    bool robot_exists(const std::string & robot_id)
+    {
+        std::lock_guard<std::mutex> lock(records_mutex_);
+
+        return records_.find(robot_id) != records_.end();
+    }
+
     void handle_assign_mission(
         const std::shared_ptr<AssignMission::Request> request,
         std::shared_ptr<AssignMission::Response> response)
     {
-        if (records_.find(request->robot_id) == records_.end())
+        if (!robot_exists(request->robot_id))
         {
             response->success = false;
             response->message =
@@ -460,6 +508,20 @@ private:
             request->command ==
             AssignMission::Request::COMMAND_START)
         {
+            if (!system_ready_.load())
+            {
+                response->success = false;
+                response->message =
+                    "System is not ready for mission dispatch";
+
+                RCLCPP_WARN(
+                    get_logger(),
+                    "Mission rejected for robot '%s': system is NOT_READY",
+                    request->robot_id.c_str());
+
+                return;
+            }
+
             if (!is_robot_online(request->robot_id))
             {
                 response->success = false;
@@ -542,6 +604,23 @@ private:
             "; final status is available on /fleet/state";
     }
 
+    void system_ready_callback(
+        const std_msgs::msg::Bool & message)
+    {
+        const bool previous_ready =
+            system_ready_.exchange(message.data);
+
+        if (message.data != previous_ready)
+        {
+            RCLCPP_INFO(
+                get_logger(),
+                "System readiness changed: %s",
+                message.data
+                    ? "READY"
+                    : "NOT_READY");
+        }
+    }
+
     std::vector<std::string> robot_ids_;
     double heartbeat_timeout_seconds_;
     std::string patrol_robot_;
@@ -565,6 +644,8 @@ private:
         rclcpp::Client<Trigger>::SharedPtr>
         patrol_stop_clients_;
 
+    std::atomic_bool system_ready_{false};
+
     rclcpp::Service<AssignMission>::SharedPtr
         assign_mission_service_;
 
@@ -586,6 +667,9 @@ private:
 
     rclcpp::TimerBase::SharedPtr
         publish_timer_;
+
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr
+        system_ready_subscription_;
 };
 
 int main(int argc, char * argv[])
