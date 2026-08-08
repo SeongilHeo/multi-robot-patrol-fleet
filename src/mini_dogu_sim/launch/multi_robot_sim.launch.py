@@ -6,12 +6,14 @@ from ament_index_python.packages import get_package_share_directory
 
 from launch import LaunchDescription
 from launch.actions import (
+    DeclareLaunchArgument,
     IncludeLaunchDescription,
     OpaqueFunction,
     SetEnvironmentVariable,
     TimerAction,
 )
 from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
 
@@ -70,7 +72,17 @@ def generate_robot_sdf(template_path: str, robot_name: str) -> str:
 
 
 def create_robot_actions(context):
-    del context
+    spawn_initial_delay_seconds = float(
+        LaunchConfiguration(
+            "spawn_initial_delay_seconds"
+        ).perform(context)
+    )
+
+    spawn_stagger_seconds = float(
+        LaunchConfiguration(
+            "spawn_stagger_seconds"
+        ).perform(context)
+    )
 
     mini_dogu_sim_share = get_package_share_directory(
         "mini_dogu_sim"
@@ -142,7 +154,10 @@ def create_robot_actions(context):
 
         actions.append(
             TimerAction(
-                period=3.0 + (2.0 * index),
+                period=(
+                    spawn_initial_delay_seconds +
+                    (spawn_stagger_seconds * index)
+                ),
                 actions=[
                     spawn_robot,
                     lidar_frame_alias,
@@ -215,6 +230,26 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
+        DeclareLaunchArgument(
+            "spawn_initial_delay_seconds",
+            default_value="12.0",
+            description=(
+                "Wall-clock delay before the first robot is spawned, "
+                "giving Gazebo time to load the world and advertise "
+                "its create service. Fixed delays race against however "
+                "long the world takes to come up (GPU driver warm-up, "
+                "world size, host load), so raise this if robots are "
+                "still missing from the entity tree after startup."
+            ),
+        ),
+        DeclareLaunchArgument(
+            "spawn_stagger_seconds",
+            default_value="4.0",
+            description=(
+                "Additional delay between each robot's spawn, on top "
+                "of spawn_initial_delay_seconds."
+            ),
+        ),
         SetEnvironmentVariable(
             name="GZ_SIM_RESOURCE_PATH",
             value=resource_path,
