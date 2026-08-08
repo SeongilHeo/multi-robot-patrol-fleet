@@ -19,7 +19,6 @@ def generate_launch_description():
                     "robot1",
                     "robot2",
                     "robot3",
-                    "robot4",
                 ],
                 "readiness_check_period_seconds": 1.0,
                 "startup_retry_period_seconds": 5.0,

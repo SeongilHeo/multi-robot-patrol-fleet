@@ -41,13 +41,6 @@ ROBOTS = [
         "z": 0.0,
         "yaw": -1.57079633,
     },
-    {
-        "name": "robot4",
-        "x": 0.0,
-        "y": -6.0,
-        "z": 0.0,
-        "yaw": 1.57079633,
-    },
 ]
 
 def generate_robot_sdf(template_path: str, robot_name: str) -> str:

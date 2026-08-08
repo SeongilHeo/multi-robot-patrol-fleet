@@ -17,7 +17,6 @@ ROBOT_IDS = [
     "robot1",
     "robot2",
     "robot3",
-    "robot4",
 ]
 
 

@@ -32,7 +32,6 @@ def generate_launch_description():
             ("/robot1/tf", "/tf"),
             ("/robot2/tf", "/tf"),
             ("/robot3/tf", "/tf"),
-            ("/robot4/tf", "/tf"),
         ],
     )
 

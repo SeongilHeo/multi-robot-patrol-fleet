@@ -7,7 +7,6 @@ def generate_launch_description():
         ("robot1", 90.0),
         ("robot2", 80.0),
         ("robot3", 85.0),
-        ("robot4", 75.0),
     ]
 
     fleet_manager = Node(
