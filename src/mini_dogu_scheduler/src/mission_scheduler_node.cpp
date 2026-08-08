@@ -93,6 +93,11 @@ using CancelMission =
       "reservation_timeout_seconds",
       10.0);
 
+    dispatch_timeout_seconds_ =
+      declare_parameter<double>(
+      "dispatch_timeout_seconds",
+      15.0);
+
     recurring_patrol_period_seconds_ =
       declare_parameter<double>(
       "recurring_patrol_period_seconds",
@@ -697,12 +702,45 @@ private:
       return;
     }
 
+    std::string timed_out_robot_id;
+
     {
       std::lock_guard<std::mutex> lock(request_mutex_);
 
       if (dispatch_in_progress_) {
-        return;
+        const double elapsed_seconds =
+          (now() - dispatch_started_at_).seconds();
+
+        if (elapsed_seconds < dispatch_timeout_seconds_) {
+          return;
+        }
+
+        /*
+         * The AssignMission response never arrived (dropped DDS
+         * message, fleet manager restart, ...). dispatch_in_progress_
+         * only ever gets cleared from that response's callback, so
+         * without this the scheduler would stay locked out of
+         * dispatching anything, forever, even with idle robots and a
+         * full queue.
+         */
+        RCLCPP_ERROR(
+          get_logger(),
+          "Dispatch to robot '%s' timed out after %.1f seconds with "
+          "no response; releasing the dispatch lock so the queue can "
+          "proceed",
+          dispatch_robot_id_.c_str(),
+          elapsed_seconds);
+
+        ++dispatch_generation_;
+        dispatch_in_progress_ = false;
+
+        timed_out_robot_id = dispatch_robot_id_;
+        dispatch_robot_id_.clear();
       }
+    }
+
+    if (!timed_out_robot_id.empty()) {
+      release_robot_reservation(timed_out_robot_id);
     }
 
     if (!assign_mission_client_->service_is_ready()) {
@@ -732,9 +770,14 @@ private:
     request->target_pose = mission->target_pose;
     request->has_target = mission->has_target;
 
+    uint64_t generation = 0;
+
     {
       std::lock_guard<std::mutex> lock(request_mutex_);
       dispatch_in_progress_ = true;
+      dispatch_started_at_ = now();
+      dispatch_robot_id_ = robot->robot_id;
+      generation = ++dispatch_generation_;
     }
 
     reserve_robot(robot->robot_id);
@@ -757,11 +800,26 @@ private:
         priority = mission->priority,
         target_pose = mission->target_pose,
         has_target = mission->has_target,
-        robot_id = robot->robot_id
+        robot_id = robot->robot_id,
+        generation
       ](
         rclcpp::Client<
           AssignMission>::SharedFuture future)
       {
+        {
+          std::lock_guard<std::mutex> lock(request_mutex_);
+
+          if (generation != dispatch_generation_) {
+            RCLCPP_WARN(
+              get_logger(),
+              "Ignoring stale dispatch response for mission '%s' / "
+              "robot '%s' (a timeout already reclaimed this slot)",
+              mission_id.c_str(),
+              robot_id.c_str());
+            return;
+          }
+        }
+
         bool accepted = false;
 
         try {
@@ -858,6 +916,7 @@ private:
 
   double minimum_battery_percentage_;
   double reservation_timeout_seconds_;
+  double dispatch_timeout_seconds_;
   double recurring_patrol_period_seconds_;
   int recurring_patrol_priority_;
 
@@ -885,6 +944,14 @@ private:
 
   std::mutex request_mutex_;
   bool dispatch_in_progress_{false};
+
+  rclcpp::Time dispatch_started_at_{
+    0,
+    0,
+    RCL_ROS_TIME};
+
+  std::string dispatch_robot_id_;
+  uint64_t dispatch_generation_{0};
 
   rclcpp::Subscription<FleetState>::SharedPtr
     fleet_state_subscription_;
