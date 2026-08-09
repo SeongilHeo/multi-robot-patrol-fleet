@@ -637,9 +637,19 @@ private:
     for (const auto & robot :
          latest_fleet_state_.robots)
     {
-      const bool idle =
-        robot.state ==
-        RobotHeartbeat::STATE_IDLE;
+      /*
+       * STATE_ERROR only ever means "the robot's last mission attempt
+       * failed" in this codebase (see robot_heartbeat_node's
+       * patrol_status_callback) - there's no separate hardware/health
+       * fault source for it. Excluding it here would let one
+       * unreachable target permanently strand every robot that
+       * happens to draw it, since nothing ever moves them back to
+       * STATE_IDLE. Treat it the same as idle: available for a fresh,
+       * possibly different, mission.
+       */
+      const bool available =
+        robot.state == RobotHeartbeat::STATE_IDLE ||
+        robot.state == RobotHeartbeat::STATE_ERROR;
 
       const bool battery_sufficient =
         robot.battery_percentage >=
@@ -653,7 +663,7 @@ private:
         robot.online &&
         !robot.confirmed_offline &&
         robot.localization_ok &&
-        idle &&
+        available &&
         battery_sufficient &&
         !reserved)
       {
