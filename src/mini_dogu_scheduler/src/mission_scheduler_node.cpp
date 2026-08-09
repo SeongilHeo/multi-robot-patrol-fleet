@@ -98,6 +98,11 @@ using CancelMission =
       "dispatch_timeout_seconds",
       15.0);
 
+    mission_start_timeout_seconds_ =
+      declare_parameter<double>(
+      "mission_start_timeout_seconds",
+      15.0);
+
     recurring_patrol_period_seconds_ =
       declare_parameter<double>(
       "recurring_patrol_period_seconds",
@@ -233,6 +238,22 @@ private:
     int32_t priority{0};
     geometry_msgs::msg::PoseStamped target_pose;
     bool has_target{false};
+
+    /*
+     * fleet_manager acks a dispatch before the robot itself confirms
+     * it, and /fleet/state is republished on its own 1s timer
+     * independent of the dispatch. So the very next fleet_state
+     * snapshot after a dispatch can still carry the robot's pre-
+     * dispatch IDLE reading. robot_confirmed_active only flips true
+     * once we've actually observed the robot doing something for this
+     * mission, so a stale IDLE can't be mistaken for completion.
+     */
+    bool robot_confirmed_active{false};
+
+    rclcpp::Time dispatched_at{
+      0,
+      0,
+      RCL_ROS_TIME};
   };
 
   void system_ready_callback(
@@ -317,9 +338,11 @@ private:
         return;
       }
 
-      for (const auto & entry : active_missions_) {
+      const rclcpp::Time current_time = now();
+
+      for (auto & entry : active_missions_) {
         const auto & robot_id = entry.first;
-        const auto & active = entry.second;
+        auto & active = entry.second;
 
         const auto robot_iterator =
           std::find_if(
@@ -338,14 +361,37 @@ private:
           robot_iterator->confirmed_offline ||
           robot_iterator->state == RobotHeartbeat::STATE_ERROR;
 
-        const bool robot_completed =
-          !robot_failed &&
-          robot_iterator->state == RobotHeartbeat::STATE_IDLE;
-
         if (robot_failed) {
           failed.emplace_back(robot_id, active);
-        } else if (robot_completed) {
+          continue;
+        }
+
+        const bool robot_idle =
+          robot_iterator->state == RobotHeartbeat::STATE_IDLE;
+
+        if (!robot_idle) {
+          active.robot_confirmed_active = true;
+          continue;
+        }
+
+        if (active.robot_confirmed_active) {
           completed_robot_ids.push_back(robot_id);
+          continue;
+        }
+
+        /*
+         * Still IDLE and never observed otherwise for this mission.
+         * Either fleet_state hasn't caught up with the dispatch yet,
+         * or the START request was silently dropped (fleet_manager
+         * acks dispatch before the robot itself confirms it). Only
+         * treat it as a failed dispatch once it's had a fair chance
+         * to actually start.
+         */
+        const double seconds_since_dispatch =
+          (current_time - active.dispatched_at).seconds();
+
+        if (seconds_since_dispatch > mission_start_timeout_seconds_) {
+          failed.emplace_back(robot_id, active);
         }
       }
 
@@ -371,8 +417,8 @@ private:
 
       RCLCPP_WARN(
         get_logger(),
-        "Mission '%s' on robot '%s' failed (offline or error); "
-        "re-queuing for reassignment",
+        "Mission '%s' on robot '%s' failed (offline, error, or never "
+        "started); re-queuing for reassignment",
         mission.mission_id.c_str(),
         robot_id.c_str());
 
@@ -689,11 +735,14 @@ private:
 
   void set_active_mission(
     const std::string & robot_id,
-    const ActiveMission & mission)
+    ActiveMission mission)
   {
+    mission.robot_confirmed_active = false;
+    mission.dispatched_at = now();
+
     std::lock_guard<std::mutex> lock(active_missions_mutex_);
 
-    active_missions_[robot_id] = mission;
+    active_missions_[robot_id] = std::move(mission);
   }
 
   void process_queue()
@@ -917,6 +966,7 @@ private:
   double minimum_battery_percentage_;
   double reservation_timeout_seconds_;
   double dispatch_timeout_seconds_;
+  double mission_start_timeout_seconds_;
   double recurring_patrol_period_seconds_;
   int recurring_patrol_priority_;
 
