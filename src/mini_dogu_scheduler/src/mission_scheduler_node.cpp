@@ -103,6 +103,11 @@ using CancelMission =
       "mission_start_timeout_seconds",
       15.0);
 
+    max_mission_attempts_ =
+      declare_parameter<int>(
+      "max_mission_attempts",
+      3);
+
     recurring_patrol_period_seconds_ =
       declare_parameter<double>(
       "recurring_patrol_period_seconds",
@@ -223,6 +228,15 @@ private:
     uint64_t sequence{0};
     geometry_msgs::msg::PoseStamped target_pose;
     bool has_target{false};
+
+    /*
+     * How many times this mission (same type/target, regardless of
+     * mission_id) has already been dispatched and failed. A mission
+     * that's inherently undispatchable - an unreachable target, not a
+     * robot problem - would otherwise bounce between robots forever;
+     * see enqueue_mission() and reconcile_active_missions_locked().
+     */
+    uint32_t attempt_count{0};
   };
 
   struct CandidateRobot
@@ -254,6 +268,8 @@ private:
       0,
       0,
       RCL_ROS_TIME};
+
+    uint32_t attempt_count{0};
   };
 
   void system_ready_callback(
@@ -415,12 +431,39 @@ private:
       const auto & robot_id = entry.first;
       const auto & mission = entry.second;
 
+      const uint32_t next_attempt_count = mission.attempt_count + 1;
+
+      if (
+        next_attempt_count >=
+        static_cast<uint32_t>(max_mission_attempts_))
+      {
+        /*
+         * A mission that fails on every robot that tries it isn't a
+         * robot problem (an unreachable target, for example) and
+         * re-queuing it again would just cycle every robot in the
+         * fleet through STATE_ERROR forever. Drop it instead of
+         * retrying indefinitely.
+         */
+        RCLCPP_ERROR(
+          get_logger(),
+          "Mission '%s' (type='%s') failed on robot '%s' after %u "
+          "attempt(s); dropping it instead of re-queuing again",
+          mission.mission_id.c_str(),
+          mission.mission_type.c_str(),
+          robot_id.c_str(),
+          next_attempt_count);
+
+        continue;
+      }
+
       RCLCPP_WARN(
         get_logger(),
         "Mission '%s' on robot '%s' failed (offline, error, or never "
-        "started); re-queuing for reassignment",
+        "started); re-queuing for reassignment (attempt %u/%d)",
         mission.mission_id.c_str(),
-        robot_id.c_str());
+        robot_id.c_str(),
+        next_attempt_count,
+        max_mission_attempts_);
 
       std::string new_mission_id;
 
@@ -429,7 +472,8 @@ private:
         mission.priority,
         mission.target_pose,
         mission.has_target,
-        new_mission_id);
+        new_mission_id,
+        next_attempt_count);
     }
 
     if (!failed.empty()) {
@@ -451,7 +495,8 @@ private:
     int32_t priority,
     const geometry_msgs::msg::PoseStamped & target_pose,
     bool has_target,
-    std::string & mission_id)
+    std::string & mission_id,
+    uint32_t attempt_count = 0)
   {
     std::lock_guard<std::mutex> lock(queue_mutex_);
 
@@ -464,7 +509,8 @@ private:
         priority,
         next_sequence_++,
         target_pose,
-        has_target
+        has_target,
+        attempt_count
       });
 
     sort_queue_locked();
@@ -859,6 +905,7 @@ private:
         priority = mission->priority,
         target_pose = mission->target_pose,
         has_target = mission->has_target,
+        attempt_count = mission->attempt_count,
         robot_id = robot->robot_id,
         generation
       ](
@@ -895,15 +942,18 @@ private:
 
             remove_mission(mission_id);
 
+            ActiveMission new_active_mission{
+              mission_id,
+              mission_type,
+              priority,
+              target_pose,
+              has_target
+            };
+            new_active_mission.attempt_count = attempt_count;
+
             set_active_mission(
               robot_id,
-              ActiveMission{
-                mission_id,
-                mission_type,
-                priority,
-                target_pose,
-                has_target
-              });
+              new_active_mission);
           } else {
             RCLCPP_WARN(
               get_logger(),
@@ -977,6 +1027,7 @@ private:
   double reservation_timeout_seconds_;
   double dispatch_timeout_seconds_;
   double mission_start_timeout_seconds_;
+  int max_mission_attempts_;
   double recurring_patrol_period_seconds_;
   int recurring_patrol_priority_;
 
