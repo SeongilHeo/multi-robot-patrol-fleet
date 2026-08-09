@@ -58,6 +58,11 @@ public:
       "reset_retry_period_seconds",
       5.0);
 
+    poll_timeout_seconds_ =
+      declare_parameter<double>(
+      "poll_timeout_seconds",
+      5.0);
+
     tf_timeout_seconds_ =
       declare_parameter<double>(
       "tf_timeout_seconds",
@@ -184,6 +189,21 @@ private:
       0,
       0,
       RCL_ROS_TIME};
+
+    /*
+     * Guards against a lifecycle GetState response being dropped
+     * mid-poll (lost DDS message, queried node restarting, ...).
+     * poll_generation is bumped every time a poll starts or is
+     * abandoned by the watchdog in check_readiness(), so a response
+     * belonging to an abandoned poll is recognized as stale and
+     * ignored instead of corrupting the next poll's tally.
+     */
+    rclcpp::Time poll_started_at{
+      0,
+      0,
+      RCL_ROS_TIME};
+
+    uint64_t poll_generation{0};
   };
 
   const std::vector<std::string> nav2_node_names_{
@@ -327,6 +347,12 @@ private:
     robot->phase =
       RobotPhase::kPolling;
 
+    robot->poll_started_at =
+      now();
+
+    const uint64_t generation =
+      ++robot->poll_generation;
+
     auto remaining =
       std::make_shared<std::size_t>(
       nav2_node_names_.size());
@@ -356,7 +382,8 @@ private:
           remaining,
           all_active,
           all_unconfigured,
-          query_failed
+          query_failed,
+          generation
         ](
           rclcpp::Client<GetState>::SharedFuture future)
         {
@@ -367,7 +394,8 @@ private:
             remaining,
             all_active,
             all_unconfigured,
-            query_failed);
+            query_failed,
+            generation);
         });
     }
   }
@@ -379,8 +407,25 @@ private:
     const std::shared_ptr<std::size_t> & remaining,
     const std::shared_ptr<bool> & all_active,
     const std::shared_ptr<bool> & all_unconfigured,
-    const std::shared_ptr<bool> & query_failed)
+    const std::shared_ptr<bool> & query_failed,
+    uint64_t generation)
   {
+    auto * poll_robot =
+      find_robot(robot_id);
+
+    if (
+      poll_robot == nullptr ||
+      poll_robot->poll_generation != generation)
+    {
+      /*
+       * This poll was already abandoned by the check_readiness()
+       * watchdog (see poll_timeout_seconds_) and a new one may already
+       * be in flight. Applying this stale response to the current
+       * tally or phase would corrupt it, so drop it.
+       */
+      return;
+    }
+
     try {
       const auto response =
         future.get();
@@ -746,6 +791,25 @@ private:
         continue;
       }
 
+      if (robot->phase == RobotPhase::kPolling) {
+        const double poll_elapsed_seconds =
+          (current_ros_time -
+          robot->poll_started_at).seconds();
+
+        if (poll_elapsed_seconds > poll_timeout_seconds_) {
+          RCLCPP_ERROR(
+            get_logger(),
+            "Lifecycle poll for robot '%s' timed out after %.1f "
+            "seconds with a missing GetState response; retrying",
+            robot_id.c_str(),
+            poll_elapsed_seconds);
+
+          ++robot->poll_generation;
+          robot->phase =
+            RobotPhase::kIdle;
+        }
+      }
+
       if (robot->phase == RobotPhase::kWaitingForInputs) {
         robot->phase =
           RobotPhase::kIdle;
@@ -824,6 +888,7 @@ private:
   double readiness_check_period_seconds_;
   double startup_retry_period_seconds_;
   double reset_retry_period_seconds_;
+  double poll_timeout_seconds_;
   double tf_timeout_seconds_;
 
   bool clock_received_{false};
