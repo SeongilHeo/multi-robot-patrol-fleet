@@ -75,6 +75,11 @@ PatrolManager::PatrolManager(const rclcpp::NodeOptions & options)
       patrol_prefix + "/status",
       status_qos);
 
+  mission_type_publisher_ =
+    this->create_publisher<std_msgs::msg::String>(
+      patrol_prefix + "/mission_type",
+      status_qos);
+
   start_service_ =
     this->create_service<StartMission>(
     patrol_prefix + "/start",
@@ -347,8 +352,30 @@ bool PatrolManager::execute_mission(
       return false;
   }
 
+  std_msgs::msg::String mission_type_message;
+  mission_type_message.data = mission_type_to_string(mission_type);
+  mission_type_publisher_->publish(mission_type_message);
+
   send_goal(poses, loops, start_index);
   return true;
+}
+
+std::string PatrolManager::mission_type_to_string(uint8_t mission_type)
+{
+  switch (mission_type) {
+    case StartMission::Request::MISSION_PATROL:
+      return "patrol";
+    case StartMission::Request::MISSION_GO_TO:
+      return "go_to";
+    case StartMission::Request::MISSION_RETURN_HOME:
+      return "return_home";
+    case StartMission::Request::MISSION_CHARGE:
+      return "charge";
+    case StartMission::Request::MISSION_INSPECT:
+      return "inspect";
+    default:
+      return "unknown";
+  }
 }
 
 void PatrolManager::send_goal(
@@ -457,11 +484,26 @@ void PatrolManager::result_callback(
 
   switch (result.code) {
     case rclcpp_action::ResultCode::SUCCEEDED:
-      publish_status("completed");
+      /*
+       * waypoint_follower runs with stop_on_failure: false, so a
+       * waypoint the robot couldn't actually reach is skipped rather
+       * than failing the action. SUCCEEDED alone therefore doesn't
+       * mean the robot got where it was sent; missed_waypoints does.
+       */
+      if (result.result && !result.result->missed_waypoints.empty()) {
+        publish_status("aborted");
 
-      RCLCPP_INFO(
-        this->get_logger(),
-        "Patrol mission completed");
+        RCLCPP_ERROR(
+          this->get_logger(),
+          "Patrol mission finished but %zu waypoint(s) were not reached",
+          result.result->missed_waypoints.size());
+      } else {
+        publish_status("completed");
+
+        RCLCPP_INFO(
+          this->get_logger(),
+          "Patrol mission completed");
+      }
       break;
 
     case rclcpp_action::ResultCode::ABORTED:

@@ -58,6 +58,15 @@ public:
           this,
           std::placeholders::_1));
 
+    mission_type_subscription_ =
+      create_subscription<std_msgs::msg::String>(
+        "patrol/mission_type",
+        patrol_status_qos,
+        [this](const std_msgs::msg::String::SharedPtr message)
+        {
+          last_reported_mission_type_ = message->data;
+        });
+
     rclcpp::QoS localization_ok_qos(1);
     localization_ok_qos.reliable();
     localization_ok_qos.transient_local();
@@ -112,7 +121,10 @@ private:
       status == "canceling")
     {
       state_ = RobotHeartbeat::STATE_PATROLLING;
-      current_mission_ = "patrol";
+      current_mission_ =
+        last_reported_mission_type_.empty()
+        ? "patrol"
+        : last_reported_mission_type_;
     }
     else if (
       status == "idle" ||
@@ -128,7 +140,10 @@ private:
       status == "error")
     {
       state_ = RobotHeartbeat::STATE_ERROR;
-      current_mission_ = "patrol";
+      current_mission_ =
+        last_reported_mission_type_.empty()
+        ? "patrol"
+        : last_reported_mission_type_;
     }
     else
     {
@@ -183,6 +198,7 @@ private:
     RobotHeartbeat::STATE_UNKNOWN};
 
   std::string current_mission_;
+  std::string last_reported_mission_type_;
 
   bool localization_ok_{true};
 
@@ -191,6 +207,9 @@ private:
 
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr
     patrol_status_subscription_;
+
+  rclcpp::Subscription<std_msgs::msg::String>::SharedPtr
+    mission_type_subscription_;
 
   rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr
     localization_ok_subscription_;

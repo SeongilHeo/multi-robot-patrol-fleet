@@ -74,6 +74,8 @@ private:
 
   void publish_status(const std::string & status);
 
+  static std::string mission_type_to_string(uint8_t mission_type);
+
   std::string robot_namespace_;
   std::string frame_id_;
   std::string action_name_;
@@ -98,6 +100,7 @@ private:
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr stop_service_;
 
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr status_publisher_;
+  rclcpp::Publisher<std_msgs::msg::String>::SharedPtr mission_type_publisher_;
 };
 
 }  // namespace mini_dogu_patrol
