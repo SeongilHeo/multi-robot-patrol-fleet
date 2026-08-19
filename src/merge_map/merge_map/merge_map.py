@@ -78,7 +78,7 @@ def map_point_to_source_frame(
 
 class MergeMapNode(Node):
     def __init__(self) -> None:
-        super().__init__("merge_map_node")
+        super().__init__("merge_map")
 
         self.frame_id = self.declare_parameter(
             "frame_id",

@@ -50,7 +50,7 @@ def merge_maps(maps, frame_id):
 
 class MergeMapNode(Node):
     def __init__(self):
-        super().__init__('merge_map_node')
+        super().__init__('offline_merge_map')
         self.frame_id = self.declare_parameter('frame_id', 'merge_map').get_parameter_value().string_value
         self.robot_count = self.declare_parameter('robot_count', 3).get_parameter_value().integer_value  # Default to 3 robots
 
